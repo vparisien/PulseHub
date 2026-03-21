@@ -136,8 +136,8 @@
                                             @(string.IsNullOrEmpty(session.Language) ? "NA" : session.Language.Substring(0, 2).ToUpper())
                                         </span>
                                     </td>
-                                    <td class="order-cell @(session.Actionable ? "actionable" : "")"
-                                        data-actionable="@session.Actionable.ToString().ToLower()">
+                                    <td class="order-cell @(session.Actionable != false ? "actionable" : "")"
+                                        data-actionable="@(session.Actionable != false ? "true" : "false")">
                                         <span class="order-link session-trigger"
                                               data-session='@System.Text.Json.JsonSerializer.Serialize(session)'>
                                             @session.OrderNumber
@@ -318,7 +318,7 @@
             document.getElementById('modalAssociateComment').value = session.AssociateComment || '';
             document.getElementById('modalCustomerComment').value = session.CustomerComment || '';
 
-            // Actionable — default true if not set
+            // Actionable — null or true = checked, only explicit false = unchecked
             document.getElementById('modalActionable').checked = session.Actionable !== false;
 
             currentModal.show();

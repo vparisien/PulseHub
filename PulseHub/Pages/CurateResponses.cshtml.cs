@@ -164,7 +164,7 @@ namespace PulseHub
             public string? ManagerComment { get; set; }
             public string? AssociateComment { get; set; }
             public string? CustomerComment { get; set; }
-            public bool Actionable { get; set; }
+            public bool? Actionable { get; set; }
             public Dictionary<string, ResponseData?> AnswersByQuestion { get; set; } = new();
         }
 
@@ -191,7 +191,7 @@ namespace PulseHub
             public string? ManagerComment { get; set; }
             public string? AssociateComment { get; set; }
             public string? CustomerComment { get; set; }
-            public bool Actionable { get; set; }
+            public bool Actionable { get; set; } // stored as non-nullable in request
         }
 
         public class RawFlatResponse
@@ -213,7 +213,7 @@ namespace PulseHub
             public string? ManagerComment { get; set; }
             public string? AssociateComment { get; set; }
             public string? CustomerComment { get; set; }
-            public bool Actionable { get; set; }
+            public bool? Actionable { get; set; }
         }
     }
 }
