@@ -47,11 +47,11 @@
         }
 
         .order-cell.actionable {
-            background-color: #fff3cd !important;
+            background-color: #ffe000 !important;
         }
 
         .order-cell.actionable:hover {
-            background-color: #ffe69c !important;
+            background-color: #ffd000 !important;
         }
 
     .order-link {
@@ -136,8 +136,8 @@
                                             @(string.IsNullOrEmpty(session.Language) ? "NA" : session.Language.Substring(0, 2).ToUpper())
                                         </span>
                                     </td>
-                                    <td class="order-cell @(session.Actionable != false ? "actionable" : "")"
-                                        data-actionable="@(session.Actionable != false ? "true" : "false")">
+                                    <td class="order-cell @(session.Actionable == true ? "actionable" : "")"
+                                        data-actionable="@(session.Actionable == true ? "true" : "false")">
                                         <span class="order-link session-trigger"
                                               data-session='@System.Text.Json.JsonSerializer.Serialize(session)'>
                                             @session.OrderNumber
