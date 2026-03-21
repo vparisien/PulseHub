@@ -1,33 +1,74 @@
-﻿@page
+@page
 @model PulseHub.ImportSurveyModel
 @{
     ViewData["Title"] = "Import NPS Survey";
 }
 
-<h2>Import NPS Survey</h2>
+<div class="container mt-4" style="max-width: 640px;">
+    <h2 class="fw-bold mb-1">Import NPS Survey</h2>
+    <p class="text-muted mb-4">Upload a CSV file to import survey responses into PulseHub.</p>
 
-<form method="post" enctype="multipart/form-data">
-    <div class="mb-3">
-        <label class="form-label">Survey Type</label>
-        <select asp-for="SurveyType" class="form-select" required>
-            <option value="">-- Select Survey Type --</option>
-            <option value="Store">Store</option>
-            <option value="Online">Online</option>
-        </select>
-    </div>
+    @if (Model.ShowOverwritePrompt)
+    {
+        <!-- Overwrite Confirmation -->
+        <div class="alert alert-warning shadow-sm">
+            <h5 class="fw-bold"><i class="bi bi-exclamation-triangle-fill me-2"></i>Duplicate Records Found</h5>
+            <p class="mb-3">
+                <strong>@Model.DuplicateCount</strong> session(s) in this file already exist in the database.
+                Do you want to overwrite them?
+            </p>
+            <div class="d-flex gap-2">
+                <form method="post">
+                    <button type="submit" asp-page-handler="Overwrite" class="btn btn-danger">
+                        <i class="bi bi-arrow-repeat me-1"></i> Yes, Overwrite
+                    </button>
+                </form>
+                <a href="/ImportSurveys" class="btn btn-outline-secondary">
+                    <i class="bi bi-x me-1"></i> Cancel
+                </a>
+            </div>
+        </div>
+    }
+    else
+    {
+        <!-- Upload Form -->
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <form method="post" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Survey Type</label>
+                        <select asp-for="SurveyType" class="form-select" required>
+                            <option value="">-- Select Survey Type --</option>
+                            <option value="Store">Store</option>
+                            <option value="Online">Online</option>
+                        </select>
+                        <div class="form-text">
+                            Store surveys use <code>#8 Store Order Name</code> / <code>#9 Purchase Place</code><br />
+                            Online surveys use <code>#8 Purchase Name</code> / <code>#9 Last Purchase Place</code>
+                        </div>
+                    </div>
 
-    <div class="mb-3">
-        <label class="form-label">CSV File</label>
-        <input asp-for="UploadFile" type="file" class="form-control" accept=".csv" required />
-    </div>
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold">CSV File</label>
+                        <input asp-for="UploadFile" type="file" class="form-control" accept=".csv" required />
+                    </div>
 
-    <button type="submit" class="btn btn-primary">Import</button>
-</form>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-file-earmark-arrow-up me-1"></i> Import
+                    </button>
+                </form>
+            </div>
+        </div>
+    }
 
-@if (!string.IsNullOrEmpty(Model.ImportSummary))
-{
-    <hr />
-    <div class="alert alert-info">
-        <pre>@Model.ImportSummary</pre>
-    </div>
-}
+    @if (!string.IsNullOrEmpty(Model.ImportSummary))
+    {
+        var isSuccess = Model.ImportSummary.Contains("Completed");
+        <div class="alert @(isSuccess ? "alert-success" : "alert-danger") mt-4 shadow-sm">
+            <i class="bi @(isSuccess ? "bi-check-circle-fill" : "bi-x-circle-fill") me-2"></i>
+            <pre class="mb-0" style="white-space: pre-wrap;">@Model.ImportSummary</pre>
+        </div>
+    }
+</div>
+
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet" />
