@@ -33,14 +33,51 @@ namespace PulseHub
 
         public async Task<IActionResult> OnPostUpdateStatusAsync([FromBody] UpdateStatusRequest request)
         {
-            var response = await _context.PulseHub_Response.FindAsync(request.ResponseId);
+            var response = await _context.PulseHub_Response
+                .Include(r => r.ResponseSession)
+                .FirstOrDefaultAsync(r => r.ResponseID == request.ResponseId);
             if (response == null) return NotFound();
 
             response.StatusID = request.StatusId;
             response.CuratedAt = DateTime.Now;
 
+            // When setting red (StatusID = 1), assign to the store manager
+            if (request.StatusId == 1 && response.ResponseSession != null)
+            {
+                var storeNumber = response.ResponseSession.StoreNumber;
+
+                if (!string.IsNullOrEmpty(storeNumber) && storeNumber != "WEB")
+                {
+                    // Strip leading zeros to match vw_LSStoreMgmtInfo.StoreID
+                    var storeId = storeNumber.TrimStart('0');
+
+                    var managerSql = $@"
+                        SELECT TOP 1 StoreManagerID
+                        FROM [LSCentral].[dbo].[vw_LSStoreMgmtInfo]
+                        WHERE CAST(StoreID AS VARCHAR) = '{storeId}'";
+
+                    var result = await _context.Database
+                        .SqlQueryRaw<StoreManagerResult>(managerSql)
+                        .ToListAsync();
+
+                    var managerId = result.FirstOrDefault()?.StoreManagerID;
+                    if (!string.IsNullOrEmpty(managerId))
+                        response.AssignedTo = managerId;
+                }
+            }
+            // When clearing red (StatusID != 1), clear AssignedTo if it was set by auto-assign
+            else if (request.StatusId != 1)
+            {
+                response.AssignedTo = null;
+            }
+
             await _context.SaveChangesAsync();
-            return new JsonResult(new { success = true });
+            return new JsonResult(new { success = true, assignedTo = response.AssignedTo });
+        }
+
+        private class StoreManagerResult
+        {
+            public string? StoreManagerID { get; set; }
         }
 
         public async Task<IActionResult> OnPostUpdateSessionAsync([FromBody] UpdateSessionRequest request)
