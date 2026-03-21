@@ -84,16 +84,16 @@
                                         <td class="text-nowrap ps-3">@row.TransactionDate.ToString("yyyy-MM-dd")</td>
                                         <td>
                                             <span class="badge bg-secondary">@row.StoreNumber?.Trim()</span>
-                                            @if (!string.IsNullOrEmpty(row.StoreName))
-                                            {
-                                                <div class="text-muted small">@row.StoreName</div>
-                                            }
                                         </td>
                                         <td>
                                             @if (!string.IsNullOrEmpty(row.EmployeeName))
                                             {
                                                 <div class="fw-bold text-success">@row.EmployeeName</div>
                                                 <div class="text-muted small">#@row.EmployeeID</div>
+                                                @if (!string.IsNullOrEmpty(row.JobTitle))
+                                                {
+                                                    <div class="text-muted small fst-italic">@row.JobTitle</div>
+                                                }
                                             }
                                             else
                                             {
@@ -176,6 +176,10 @@
                                             {
                                                 <div class="fw-bold">@row.ManagerName</div>
                                                 <div class="text-muted small">#@row.AssignedTo</div>
+                                                @if (!string.IsNullOrEmpty(row.ManagerTitle))
+                                                {
+                                                    <div class="text-muted small fst-italic">@row.ManagerTitle</div>
+                                                }
                                             }
                                             else
                                             {

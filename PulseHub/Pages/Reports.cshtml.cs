@@ -47,18 +47,19 @@ namespace PulseHub.Pages
                 SELECT
                     r.ResponseID,
                     r.ResponseSessionID,
-                    r.RecognitionOf        AS EmployeeID,
-                    e.EmployeeName,
-                    e.StoreName,
+                    r.RecognitionOf                 AS EmployeeID,
+                    e.employeeName                  AS EmployeeName,
+                    e.storeID                       AS EmployeeStoreID,
+                    e.jobTitleDescriptionEN         AS JobTitle,
                     s.StoreNumber,
                     s.TransactionDate,
-                    s.Email                AS CustomerEmail,
-                    s.FirstName            AS CustomerName,
+                    s.Email                         AS CustomerEmail,
+                    s.FirstName                     AS CustomerName,
                     r.AnswerText
                 FROM PulseHub_Response r
                 INNER JOIN PulseHub_ResponseSession s ON r.ResponseSessionID = s.ResponseSessionID
                 LEFT JOIN [LSCentral].[dbo].[vw_LSStoreEmployees] e
-                    ON CAST(e.EmployeeID AS VARCHAR) = CAST(r.RecognitionOf AS VARCHAR)
+                    ON CAST(e.employeeID AS VARCHAR) = CAST(r.RecognitionOf AS VARCHAR)
                 WHERE r.StatusID = 2
                   AND s.TransactionDate >= '{StartDate:yyyy-MM-dd}'
                   AND s.TransactionDate <= '{EndDate:yyyy-MM-dd} 23:59:59'
@@ -76,11 +77,13 @@ namespace PulseHub.Pages
                     r.ResponseID,
                     r.ResponseSessionID,
                     r.AssignedTo,
-                    e.EmployeeName         AS ManagerName,
+                    e.employeeName                  AS ManagerName,
+                    e.storeID                       AS ManagerStoreID,
+                    e.jobTitleDescriptionEN         AS ManagerTitle,
                     s.StoreNumber,
                     s.TransactionDate,
-                    s.Email                AS CustomerEmail,
-                    s.FirstName            AS CustomerName,
+                    s.Email                         AS CustomerEmail,
+                    s.FirstName                     AS CustomerName,
                     r.AnswerText,
                     r.CuratedAt,
                     r.RespondedAt,
@@ -91,7 +94,7 @@ namespace PulseHub.Pages
                 FROM PulseHub_Response r
                 INNER JOIN PulseHub_ResponseSession s ON r.ResponseSessionID = s.ResponseSessionID
                 LEFT JOIN [LSCentral].[dbo].[vw_LSStoreEmployees] e
-                    ON CAST(e.EmployeeID AS VARCHAR) = r.AssignedTo
+                    ON CAST(e.employeeID AS VARCHAR) = r.AssignedTo
                 WHERE r.StatusID = 1
                   AND s.TransactionDate >= '{StartDate:yyyy-MM-dd}'
                   AND s.TransactionDate <= '{EndDate:yyyy-MM-dd} 23:59:59'
@@ -110,7 +113,8 @@ namespace PulseHub.Pages
             public int ResponseSessionID { get; set; }
             public string? EmployeeID { get; set; }
             public string? EmployeeName { get; set; }
-            public string? StoreName { get; set; }
+            public string? EmployeeStoreID { get; set; }
+            public string? JobTitle { get; set; }
             public string? StoreNumber { get; set; }
             public DateTime TransactionDate { get; set; }
             public string? CustomerEmail { get; set; }
@@ -124,6 +128,8 @@ namespace PulseHub.Pages
             public int ResponseSessionID { get; set; }
             public string? AssignedTo { get; set; }
             public string? ManagerName { get; set; }
+            public string? ManagerStoreID { get; set; }
+            public string? ManagerTitle { get; set; }
             public string? StoreNumber { get; set; }
             public DateTime TransactionDate { get; set; }
             public string? CustomerEmail { get; set; }
