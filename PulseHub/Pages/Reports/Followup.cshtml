@@ -11,7 +11,7 @@
         </a>
         <div>
             <h2 class="fw-bold mb-0"><i class="bi bi-flag-fill text-danger me-2"></i>Follow-up Status</h2>
-            <small class="text-muted">Red-flagged responses assigned to managers — track action status</small>
+            <small class="text-muted">Red-flagged sessions grouped by order — track action status</small>
         </div>
     </div>
 
@@ -49,8 +49,11 @@
         </div>
     </div>
 
-    @if (Model.Rows.Any())
+    @if (Model.Sessions.Any())
     {
+        <!-- Hidden antiforgery token for AJAX -->
+        <form id="ajaxTokenForm">@Html.AntiForgeryToken()</form>
+
         <div class="card shadow-sm">
             <div class="card-body p-0">
                 <div class="table-responsive">
@@ -60,17 +63,17 @@
                                 <th class="ps-3">Status</th>
                                 <th>Date</th>
                                 <th>Store #</th>
-                                <th>Assigned To</th>
+                                <th>Order #</th>
                                 <th>Customer</th>
+                                <th>Assigned To</th>
                                 <th>Flagged</th>
                                 <th>Responded</th>
-                                <th>Comment</th>
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach (var row in Model.Rows)
+                            @foreach (var session in Model.Sessions)
                             {
-                                var isPending = row.ActionStatus == "Pending";
+                                var isPending = session.ActionStatus == "Pending";
                                 <tr class="@(isPending ? "table-danger" : "table-success")">
                                     <td class="ps-3">
                                         @if (isPending)
@@ -82,39 +85,49 @@
                                             <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Actioned</span>
                                         }
                                     </td>
-                                    <td class="text-nowrap">@row.TransactionDate.ToString("yyyy-MM-dd")</td>
-                                    <td><span class="badge bg-secondary">@row.StoreNumber?.Trim()</span></td>
+                                    <td class="text-nowrap">@session.TransactionDate.ToString("yyyy-MM-dd")</td>
+                                    <td><span class="badge bg-secondary">@session.StoreNumber?.Trim()</span></td>
                                     <td>
-                                        @if (!string.IsNullOrEmpty(row.ManagerName))
+                                        <code class="order-link session-trigger"
+                                              style="cursor:pointer; text-decoration:underline; color:#0d6efd;"
+                                              data-session='@System.Text.Json.JsonSerializer.Serialize(session)'>
+                                            @session.OrderNumber
+                                        </code>
+                                        @if (session.FlaggedCount > 1)
                                         {
-                                            <div class="fw-bold">@row.ManagerName</div>
-                                            <div class="text-muted small">#@row.AssignedTo</div>
-                                            @if (!string.IsNullOrEmpty(row.ManagerTitle))
-                                            {
-                                                <div class="text-muted small fst-italic">@row.ManagerTitle</div>
-                                            }
+                                            <span class="badge bg-warning text-dark ms-1">@session.FlaggedCount items</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <div>@session.CustomerName</div>
+                                        <div class="text-muted small">@session.CustomerEmail</div>
+                                    </td>
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(session.ManagerName))
+                                        {
+                                            <div class="fw-bold">@session.ManagerName</div>
+                                            <div class="text-muted small fst-italic">@session.ManagerTitle</div>
+                                        }
+                                        else if (!string.IsNullOrEmpty(session.AssignedTo))
+                                        {
+                                            <span class="text-muted fst-italic">#@session.AssignedTo</span>
                                         }
                                         else
                                         {
-                                            <span class="text-muted fst-italic">#@row.AssignedTo</span>
+                                            <span class="text-muted">—</span>
                                         }
                                     </td>
-                                    <td>
-                                        <div>@row.CustomerName</div>
-                                        <div class="text-muted small">@row.CustomerEmail</div>
-                                    </td>
-                                    <td class="text-nowrap small">@row.CuratedAt?.ToString("yyyy-MM-dd")</td>
+                                    <td class="text-nowrap small">@session.CuratedAt?.ToString("yyyy-MM-dd")</td>
                                     <td class="text-nowrap small">
-                                        @if (row.RespondedAt.HasValue)
+                                        @if (session.RespondedAt.HasValue)
                                         {
-                                            @row.RespondedAt.Value.ToString("yyyy-MM-dd")
+                                            @session.RespondedAt.Value.ToString("yyyy-MM-dd")
                                         }
                                         else
                                         {
                                             <span class="text-danger fst-italic">—</span>
                                         }
                                     </td>
-                                    <td class="text-muted small" style="max-width:280px;">@row.AnswerText</td>
                                 </tr>
                             }
                         </tbody>
@@ -130,3 +143,217 @@
         </div>
     }
 </div>
+
+<!-- Session Detail Modal -->
+<div class="modal fade" id="sessionModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title"><i class="bi bi-flag-fill text-danger me-2"></i>Follow-up: <span id="modalOrderNum"></span></h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="modalSessionId" />
+
+                <!-- Manager info (read-only) -->
+                <div class="alert alert-secondary py-2 mb-3" id="modalManagerInfo"></div>
+
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Category</label>
+                        <select id="modalCategory" class="form-select" onchange="filterSubCategories()">
+                            <option value="">-- Select --</option>
+                            @foreach (var cat in Model.Categories)
+                            {
+                                <option value="@cat.CategoryID">@cat.Category</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Sub-Category</label>
+                        <select id="modalSubCategory" class="form-select">
+                            <option value="">-- Select --</option>
+                            @foreach (var sub in Model.SubCategories)
+                            {
+                                <option value="@sub.SubCategoryID" data-parent="@sub.CategoryID">@sub.SubCategory</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Department</label>
+                        <select id="modalDepartment" class="form-select">
+                            <option value="">-- Select --</option>
+                            @foreach (var dept in Model.Departments)
+                            {
+                                <option value="@dept.DepartmentID">@dept.Department</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Curator Comment</label>
+                    <textarea id="modalCuratorComment" class="form-control" rows="2"></textarea>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-bold small">Manager Comment</label>
+                        <textarea id="modalManagerComment" class="form-control form-control-sm" rows="2"></textarea>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-bold small">Associate Comment</label>
+                        <textarea id="modalAssociateComment" class="form-control form-control-sm" rows="2"></textarea>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold small">Customer Comment</label>
+                    <textarea id="modalCustomerComment" class="form-control form-control-sm" rows="2"></textarea>
+                </div>
+
+                <div class="d-flex align-items-center gap-4">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="modalActionable" />
+                        <label class="form-check-label fw-bold" for="modalActionable">Actionable</label>
+                    </div>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="modalResponded" />
+                        <label class="form-check-label fw-bold" for="modalResponded">
+                            <span class="text-success">Mark as Responded</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" id="saveBtn" onclick="saveSession()">Save Changes</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast -->
+<div id="saveToast" class="toast align-items-center border-0" role="alert"
+     style="position:fixed; bottom:1.5rem; right:1.5rem; z-index:9999; min-width:260px;">
+    <div class="d-flex">
+        <div class="toast-body" id="saveToastMessage"></div>
+        <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    let currentModal, saveToast;
+
+    document.addEventListener('DOMContentLoaded', function () {
+        currentModal = new bootstrap.Modal(document.getElementById('sessionModal'));
+        saveToast = new bootstrap.Toast(document.getElementById('saveToast'), { delay: 4000 });
+
+        document.querySelectorAll('.session-trigger').forEach(trigger => {
+            trigger.addEventListener('click', function () {
+                const session = JSON.parse(this.getAttribute('data-session'));
+                openModal(session);
+            });
+        });
+    });
+
+    function openModal(s) {
+        document.getElementById('modalSessionId').value = s.ResponseSessionID;
+        document.getElementById('modalOrderNum').innerText = s.OrderNumber || 'N/A';
+
+        // Manager info banner
+        const mgr = s.ManagerName
+            ? `<i class="bi bi-person-fill me-1"></i><strong>${s.ManagerName}</strong> — ${s.ManagerTitle || ''} <span class="text-muted">(#${s.AssignedTo})</span>`
+            : `<i class="bi bi-person me-1"></i>Assigned to: <span class="text-muted">#${s.AssignedTo || 'Unassigned'}</span>`;
+        document.getElementById('modalManagerInfo').innerHTML = mgr;
+
+        // Dropdowns
+        document.getElementById('modalCategory').value = s.CategoryID || '';
+        filterSubCategories();
+        document.getElementById('modalSubCategory').value = s.SubCategoryID || '';
+        document.getElementById('modalDepartment').value = s.DepartmentID || '';
+
+        // Comments
+        document.getElementById('modalCuratorComment').value = s.CuratorComment || '';
+        document.getElementById('modalManagerComment').value = s.ManagerComment || '';
+        document.getElementById('modalAssociateComment').value = s.AssociateComment || '';
+        document.getElementById('modalCustomerComment').value = s.CustomerComment || '';
+
+        // Toggles
+        document.getElementById('modalActionable').checked = s.Actionable === true;
+        document.getElementById('modalResponded').checked = s.RespondedAt !== null;
+
+        currentModal.show();
+    }
+
+    function filterSubCategories() {
+        const categoryId = document.getElementById('modalCategory').value;
+        document.querySelectorAll('#modalSubCategory option').forEach(opt => {
+            if (!opt.value) return;
+            const match = !categoryId || opt.getAttribute('data-parent') === categoryId;
+            opt.style.display = match ? 'block' : 'none';
+            if (!match && document.getElementById('modalSubCategory').value === opt.value)
+                document.getElementById('modalSubCategory').value = '';
+        });
+    }
+
+    async function saveSession() {
+        const saveBtn = document.getElementById('saveBtn');
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving...';
+
+        const sessionId = parseInt(document.getElementById('modalSessionId').value);
+        const responded = document.getElementById('modalResponded').checked;
+
+        const data = {
+            ResponseSessionId: sessionId,
+            CategoryID: document.getElementById('modalCategory').value ? parseInt(document.getElementById('modalCategory').value) : null,
+            SubCategoryID: document.getElementById('modalSubCategory').value ? parseInt(document.getElementById('modalSubCategory').value) : null,
+            DepartmentID: document.getElementById('modalDepartment').value ? parseInt(document.getElementById('modalDepartment').value) : null,
+            CuratorComment: document.getElementById('modalCuratorComment').value,
+            ManagerComment: document.getElementById('modalManagerComment').value,
+            AssociateComment: document.getElementById('modalAssociateComment').value,
+            CustomerComment: document.getElementById('modalCustomerComment').value,
+            Actionable: document.getElementById('modalActionable').checked
+        };
+
+        const token = document.querySelector('input[name="__RequestVerificationToken"]').value;
+
+        try {
+            const [sessionRes, respondedRes] = await Promise.all([
+                fetch('?handler=UpdateSession', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'RequestVerificationToken': token },
+                    body: JSON.stringify(data)
+                }),
+                fetch('?handler=MarkResponded', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'RequestVerificationToken': token },
+                    body: JSON.stringify({ responseSessionId: sessionId, responded })
+                })
+            ]);
+
+            if (sessionRes.ok && respondedRes.ok) {
+                currentModal.hide();
+                location.reload();
+            } else {
+                showToast('❌ Save failed. Please try again.', 'bg-danger text-white');
+            }
+        } catch (err) {
+            console.error(err);
+            showToast('❌ Network error. Please try again.', 'bg-danger text-white');
+        } finally {
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Save Changes';
+        }
+    }
+
+    function showToast(msg, classes) {
+        const el = document.getElementById('saveToast');
+        el.className = 'toast align-items-center border-0 ' + classes;
+        document.getElementById('saveToastMessage').textContent = msg;
+        saveToast.show();
+    }
+</script>
+}
