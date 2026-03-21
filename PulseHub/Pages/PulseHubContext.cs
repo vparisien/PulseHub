@@ -80,6 +80,7 @@ namespace PulseHub
         public string? ManagerComment { get; set; }
         public string? AssociateComment { get; set; }
         public string? CustomerComment { get; set; }
+        public bool Actionable { get; set; } = true;
 
         public List<PulseHub_Response> Responses { get; set; } = new List<PulseHub_Response>();
     }

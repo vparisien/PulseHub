@@ -56,6 +56,7 @@ namespace PulseHub
             session.ManagerComment = request.ManagerComment;
             session.AssociateComment = request.AssociateComment;
             session.CustomerComment = request.CustomerComment;
+            session.Actionable = request.Actionable;
 
             await _context.SaveChangesAsync();
             return new JsonResult(new { success = true });
@@ -98,7 +99,8 @@ namespace PulseHub
                     s.CuratorComment, 
                     s.ManagerComment, 
                     s.AssociateComment,
-                    s.CustomerComment
+                    s.CustomerComment,
+                    s.Actionable
                 FROM PulseHub_Response r
                 INNER JOIN PulseHub_ResponseSession s ON r.ResponseSessionID = s.ResponseSessionID";
 
@@ -132,6 +134,7 @@ namespace PulseHub
                         ManagerComment = f.ManagerComment,
                         AssociateComment = f.AssociateComment,
                         CustomerComment = f.CustomerComment,
+                        Actionable = f.Actionable,
                         AnswersByQuestion = Questions.ToDictionary(
                             q => q,
                             q => g.Where(r => (lookup.ContainsKey(r.QuestionText ?? "") ? lookup[r.QuestionText!] : r.QuestionText ?? "") == q)
@@ -161,6 +164,7 @@ namespace PulseHub
             public string? ManagerComment { get; set; }
             public string? AssociateComment { get; set; }
             public string? CustomerComment { get; set; }
+            public bool Actionable { get; set; }
             public Dictionary<string, ResponseData?> AnswersByQuestion { get; set; } = new();
         }
 
@@ -187,6 +191,7 @@ namespace PulseHub
             public string? ManagerComment { get; set; }
             public string? AssociateComment { get; set; }
             public string? CustomerComment { get; set; }
+            public bool Actionable { get; set; }
         }
 
         public class RawFlatResponse
@@ -208,6 +213,7 @@ namespace PulseHub
             public string? ManagerComment { get; set; }
             public string? AssociateComment { get; set; }
             public string? CustomerComment { get; set; }
+            public bool Actionable { get; set; }
         }
     }
 }

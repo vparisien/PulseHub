@@ -46,6 +46,14 @@
             background-color: rgba(13, 110, 253, 0.25) !important;
         }
 
+        .order-cell.actionable {
+            background-color: #fff3cd !important;
+        }
+
+        .order-cell.actionable:hover {
+            background-color: #ffe69c !important;
+        }
+
     .order-link {
         cursor: pointer;
         text-decoration: underline;
@@ -128,7 +136,8 @@
                                             @(string.IsNullOrEmpty(session.Language) ? "NA" : session.Language.Substring(0, 2).ToUpper())
                                         </span>
                                     </td>
-                                    <td class="order-cell">
+                                    <td class="order-cell @(session.Actionable ? "actionable" : "")"
+                                        data-actionable="@session.Actionable.ToString().ToLower()">
                                         <span class="order-link session-trigger"
                                               data-session='@System.Text.Json.JsonSerializer.Serialize(session)'>
                                             @session.OrderNumber
@@ -219,6 +228,11 @@
                         <label class="form-label fw-bold small">Customer Comment</label>
                         <textarea id="modalCustomerComment" class="form-control form-control-sm" rows="2"></textarea>
                     </div>
+
+                    <div class="form-check form-switch mb-2">
+                        <input class="form-check-input" type="checkbox" id="modalActionable" checked />
+                        <label class="form-check-label fw-bold" for="modalActionable">Actionable</label>
+                    </div>
                 </form>
             </div>
             <div class="modal-footer">
@@ -304,6 +318,9 @@
             document.getElementById('modalAssociateComment').value = session.AssociateComment || '';
             document.getElementById('modalCustomerComment').value = session.CustomerComment || '';
 
+            // Actionable — default true if not set
+            document.getElementById('modalActionable').checked = session.Actionable !== false;
+
             currentModal.show();
         }
 
@@ -337,7 +354,8 @@
                 CuratorComment: document.getElementById('modalCuratorComment').value,
                 ManagerComment: document.getElementById('modalManagerComment').value,
                 AssociateComment: document.getElementById('modalAssociateComment').value,
-                CustomerComment: document.getElementById('modalCustomerComment').value
+                CustomerComment: document.getElementById('modalCustomerComment').value,
+                Actionable: document.getElementById('modalActionable').checked
             };
 
             const token = document.querySelector('input[name="__RequestVerificationToken"]').value;
@@ -350,6 +368,15 @@
                 });
 
                 if (response.ok) {
+                    // Update order cell highlight immediately without full reload
+                    const sessionId = data.ResponseSessionId;
+                    const trigger = document.querySelector(`.session-trigger[data-session*='"ResponseSessionID":${sessionId}']`);
+                    if (trigger) {
+                        const cell = trigger.closest('.order-cell');
+                        if (cell) {
+                            cell.classList.toggle('actionable', data.Actionable);
+                        }
+                    }
                     currentModal.hide();
                     location.reload();
                 } else {
