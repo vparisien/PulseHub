@@ -45,22 +45,22 @@ namespace PulseHub.Pages.Reports
                     s.OrderNumber,
                     s.StoreNumber,
                     s.TransactionDate,
-                    s.Email                         AS CustomerEmail,
-                    s.FirstName                     AS CustomerName,
+                    s.Email                                         AS CustomerEmail,
+                    s.FirstName                                     AS CustomerName,
                     s.CategoryID,
                     s.SubCategoryID,
                     s.DepartmentID,
-                    s.CuratorComment,
-                    s.ManagerComment,
-                    s.AssociateComment,
-                    s.CustomerComment,
+                    MAX(CAST(s.CuratorComment   AS NVARCHAR(MAX)))  AS CuratorComment,
+                    MAX(CAST(s.ManagerComment   AS NVARCHAR(MAX)))  AS ManagerComment,
+                    MAX(CAST(s.AssociateComment AS NVARCHAR(MAX)))  AS AssociateComment,
+                    MAX(CAST(s.CustomerComment  AS NVARCHAR(MAX)))  AS CustomerComment,
                     s.Actionable,
                     r.AssignedTo,
-                    e.employeeName                  AS ManagerName,
-                    e.jobTitleDescriptionEN         AS ManagerTitle,
-                    MIN(r.CuratedAt)                AS CuratedAt,
-                    MAX(r.RespondedAt)              AS RespondedAt,
-                    COUNT(r.ResponseID)             AS FlaggedCount,
+                    e.employeeName                                  AS ManagerName,
+                    e.jobTitleDescriptionEN                         AS ManagerTitle,
+                    MIN(r.CuratedAt)                                AS CuratedAt,
+                    MAX(r.RespondedAt)                              AS RespondedAt,
+                    COUNT(r.ResponseID)                             AS FlaggedCount,
                     CASE
                         WHEN MAX(r.RespondedAt) IS NOT NULL THEN 'Actioned'
                         ELSE 'Pending'
@@ -75,7 +75,6 @@ namespace PulseHub.Pages.Reports
                 GROUP BY
                     s.ResponseSessionID, s.OrderNumber, s.StoreNumber, s.TransactionDate,
                     s.Email, s.FirstName, s.CategoryID, s.SubCategoryID, s.DepartmentID,
-                    s.CuratorComment, s.ManagerComment, s.AssociateComment, s.CustomerComment,
                     s.Actionable, r.AssignedTo, e.employeeName, e.jobTitleDescriptionEN
                 ORDER BY MAX(r.RespondedAt) ASC, s.TransactionDate DESC";
 
