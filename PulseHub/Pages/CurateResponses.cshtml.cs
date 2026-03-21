@@ -48,8 +48,8 @@ namespace PulseHub
 
                 if (!string.IsNullOrEmpty(storeNumber) && storeNumber != "WEB")
                 {
-                    // Strip leading zeros to match vw_LSStoreMgmtInfo.StoreID
-                    var storeId = storeNumber.TrimStart('0');
+                    // Strip whitespace and leading zeros to match vw_LSStoreMgmtInfo.StoreID
+                    var storeId = storeNumber.Trim().TrimStart('0');
 
                     var managerSql = $@"
                         SELECT TOP 1 StoreManagerID
@@ -61,8 +61,8 @@ namespace PulseHub
                         .ToListAsync();
 
                     var managerId = result.FirstOrDefault()?.StoreManagerID;
-                    if (!string.IsNullOrEmpty(managerId))
-                        response.AssignedTo = managerId;
+                    if (managerId.HasValue)
+                        response.AssignedTo = managerId.Value.ToString();
                 }
             }
             // When clearing red (StatusID != 1), clear AssignedTo if it was set by auto-assign
@@ -77,7 +77,7 @@ namespace PulseHub
 
         private class StoreManagerResult
         {
-            public string? StoreManagerID { get; set; }
+            public int? StoreManagerID { get; set; }
         }
 
         public async Task<IActionResult> OnPostUpdateSessionAsync([FromBody] UpdateSessionRequest request)
