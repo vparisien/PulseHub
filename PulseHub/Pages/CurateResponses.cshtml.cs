@@ -48,7 +48,6 @@ namespace PulseHub
             var session = await _context.PulseHub_ResponseSession.FindAsync(request.ResponseSessionId);
             if (session == null) return NotFound();
 
-            // Updated to use the int? types from your new Context definition
             session.CategoryID = request.CategoryID;
             session.SubCategoryID = request.SubCategoryID;
             session.DepartmentID = request.DepartmentID;
@@ -56,6 +55,7 @@ namespace PulseHub
             session.CuratorComment = request.CuratorComment;
             session.ManagerComment = request.ManagerComment;
             session.AssociateComment = request.AssociateComment;
+            session.CustomerComment = request.CustomerComment;
 
             await _context.SaveChangesAsync();
             return new JsonResult(new { success = true });
@@ -79,7 +79,7 @@ namespace PulseHub
                     return g.Select(x => new { Raw = x.Question, Canonical = header });
                 }).ToDictionary(x => x.Raw, x => x.Canonical);
 
-            // 3. RAW SQL APPROACH (Bypassing potential mapping issues for the join)
+            // 3. RAW SQL — keep IDs as int? to avoid VARCHAR cast issues
             var rawSql = @"
                 SELECT 
                     r.ResponseID, 
@@ -92,12 +92,13 @@ namespace PulseHub
                     s.FirstName, 
                     s.Language, 
                     s.OrderNumber,
-                    CAST(s.CategoryID AS VARCHAR(50)) as CategoryID,
-                    CAST(s.SubCategoryID AS VARCHAR(50)) as SubCategoryID,
-                    CAST(s.DepartmentID AS VARCHAR(50)) as DepartmentID,
+                    s.CategoryID,
+                    s.SubCategoryID,
+                    s.DepartmentID,
                     s.CuratorComment, 
                     s.ManagerComment, 
-                    s.AssociateComment
+                    s.AssociateComment,
+                    s.CustomerComment
                 FROM PulseHub_Response r
                 INNER JOIN PulseHub_ResponseSession s ON r.ResponseSessionID = s.ResponseSessionID";
 
@@ -109,7 +110,8 @@ namespace PulseHub
                 (!EndDate.HasValue || r.TransactionDate.Date <= EndDate.Value.Date))
                 .ToList();
 
-            Questions = filtered.Select(r => lookup.ContainsKey(r.QuestionText) ? lookup[r.QuestionText] : r.QuestionText)
+            Questions = filtered.Select(r => lookup.ContainsKey(r.QuestionText ?? "") ? lookup[r.QuestionText!] : r.QuestionText ?? "")
+                                .Where(q => !string.IsNullOrEmpty(q))
                                 .Distinct().OrderBy(q => q).ToList();
 
             PivotedResponses = filtered.GroupBy(r => r.ResponseSessionID)
@@ -129,9 +131,10 @@ namespace PulseHub
                         CuratorComment = f.CuratorComment,
                         ManagerComment = f.ManagerComment,
                         AssociateComment = f.AssociateComment,
+                        CustomerComment = f.CustomerComment,
                         AnswersByQuestion = Questions.ToDictionary(
                             q => q,
-                            q => g.Where(r => (lookup.ContainsKey(r.QuestionText) ? lookup[r.QuestionText] : r.QuestionText) == q)
+                            q => g.Where(r => (lookup.ContainsKey(r.QuestionText ?? "") ? lookup[r.QuestionText!] : r.QuestionText ?? "") == q)
                                   .Select(r => new ResponseData
                                   {
                                       ResponseID = r.ResponseID,
@@ -151,12 +154,13 @@ namespace PulseHub
             public string? FirstName { get; set; }
             public string? Language { get; set; }
             public string? OrderNumber { get; set; }
-            public string? CategoryID { get; set; }
-            public string? SubCategoryID { get; set; }
-            public string? DepartmentID { get; set; }
+            public int? CategoryID { get; set; }
+            public int? SubCategoryID { get; set; }
+            public int? DepartmentID { get; set; }
             public string? CuratorComment { get; set; }
             public string? ManagerComment { get; set; }
             public string? AssociateComment { get; set; }
+            public string? CustomerComment { get; set; }
             public Dictionary<string, ResponseData?> AnswersByQuestion { get; set; } = new();
         }
 
@@ -182,6 +186,7 @@ namespace PulseHub
             public string? CuratorComment { get; set; }
             public string? ManagerComment { get; set; }
             public string? AssociateComment { get; set; }
+            public string? CustomerComment { get; set; }
         }
 
         public class RawFlatResponse
@@ -196,12 +201,13 @@ namespace PulseHub
             public string? FirstName { get; set; }
             public string? Language { get; set; }
             public string? OrderNumber { get; set; }
-            public string? CategoryID { get; set; }
-            public string? SubCategoryID { get; set; }
-            public string? DepartmentID { get; set; }
+            public int? CategoryID { get; set; }
+            public int? SubCategoryID { get; set; }
+            public int? DepartmentID { get; set; }
             public string? CuratorComment { get; set; }
             public string? ManagerComment { get; set; }
             public string? AssociateComment { get; set; }
+            public string? CustomerComment { get; set; }
         }
     }
 }

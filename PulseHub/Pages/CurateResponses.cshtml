@@ -1,4 +1,4 @@
-﻿@page
+@page
 @model PulseHub.CurateResponsesPivotModel
 @{
     ViewData["Title"] = "Curate Responses";
@@ -28,10 +28,38 @@
             background-color: rgba(0,0,0,0.05);
         }
 
+    /* Order number cell — consistent look & feel with clickable cells */
+    .order-cell {
+        cursor: pointer;
+        transition: background-color 0.2s;
+        user-select: none;
+        padding: 8px !important;
+        border: 1px solid #dee2e6;
+    }
+
+        .order-cell:hover {
+            filter: brightness(0.95);
+            background-color: rgba(13, 110, 253, 0.08);
+        }
+
+        .order-cell.flash-click {
+            background-color: rgba(13, 110, 253, 0.25) !important;
+        }
+
     .order-link {
         cursor: pointer;
         text-decoration: underline;
         color: #0d6efd;
+        font-family: monospace;
+    }
+
+    /* Save error toast */
+    #saveToast {
+        position: fixed;
+        bottom: 1.5rem;
+        right: 1.5rem;
+        z-index: 9999;
+        min-width: 260px;
     }
 </style>
 
@@ -46,7 +74,6 @@
     <div class="card shadow-sm mb-4">
         <div class="card-body">
             <form method="post" id="filterForm">
-                @Html.AntiForgeryToken()
                 <div class="row g-3 align-items-end">
                     <div class="col-md-3">
                         <label class="form-label fw-semibold">Start Date</label>
@@ -57,10 +84,10 @@
                         <input type="date" asp-for="EndDate" class="form-control" />
                     </div>
                     <div class="col-md-2">
-                        <button type="submit" class="btn btn-primary w-100">Filter Results</button>
+                        <button type="submit" asp-page-handler="Filter" class="btn btn-primary w-100">Filter Results</button>
                     </div>
                     <div class="col-md-2">
-                        <a asp-page="./CurateResponsesPivot" class="btn btn-outline-secondary w-100">Reset</a>
+                        <a asp-page="./CurateResponses" class="btn btn-outline-secondary w-100">Reset</a>
                     </div>
                 </div>
             </form>
@@ -101,11 +128,11 @@
                                             @(string.IsNullOrEmpty(session.Language) ? "NA" : session.Language.Substring(0, 2).ToUpper())
                                         </span>
                                     </td>
-                                    <td>
-                                        <code class="order-link session-trigger"
+                                    <td class="order-cell">
+                                        <span class="order-link session-trigger"
                                               data-session='@System.Text.Json.JsonSerializer.Serialize(session)'>
                                             @session.OrderNumber
-                                        </code>
+                                        </span>
                                     </td>
                                     @foreach (var question in Model.Questions)
                                     {
@@ -127,6 +154,7 @@
     }
 </div>
 
+<!-- Session Curation Modal -->
 <div class="modal fade" id="sessionModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
@@ -186,37 +214,54 @@
                             <textarea id="modalAssociateComment" class="form-control form-control-sm" rows="2"></textarea>
                         </div>
                     </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">Customer Comment</label>
+                        <textarea id="modalCustomerComment" class="form-control form-control-sm" rows="2"></textarea>
+                    </div>
                 </form>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                <button type="button" class="btn btn-primary" onclick="saveSessionCuration()">Save Changes</button>
+                <button type="button" class="btn btn-primary" id="saveBtn" onclick="saveSessionCuration()">Save Changes</button>
             </div>
         </div>
+    </div>
+</div>
+
+<!-- Save feedback toast -->
+<div id="saveToast" class="toast align-items-center border-0" role="alert" aria-live="assertive" aria-atomic="true">
+    <div class="d-flex">
+        <div class="toast-body" id="saveToastMessage"></div>
+        <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast"></button>
     </div>
 </div>
 
 @section Scripts {
     <script type="text/javascript">
         let currentModal;
+        let saveToast;
 
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             currentModal = new bootstrap.Modal(document.getElementById('sessionModal'));
+            saveToast = new bootstrap.Toast(document.getElementById('saveToast'), { delay: 4000 });
+
             const table = document.getElementById('responsesTable');
             if (!table) return;
 
-            // Handle Single and Double Clicks for Status Updates
-            table.addEventListener('click', function(e) {
+            // Handle Single Clicks — only on clickable-cell (NOT order-cell)
+            table.addEventListener('click', function (e) {
                 const cell = e.target.closest('.clickable-cell');
                 if (!cell) return;
 
                 if (cell.clickTimer) clearTimeout(cell.clickTimer);
-                cell.clickTimer = setTimeout(function() {
+                cell.clickTimer = setTimeout(function () {
                     if (!cell.isDoubleClick) performStatusUpdate(cell, 1);
                     cell.isDoubleClick = false;
                 }, 250);
             });
 
+            // Handle Double Clicks — only on clickable-cell
             table.addEventListener('dblclick', function (e) {
                 const cell = e.target.closest('.clickable-cell');
                 if (!cell) return;
@@ -226,13 +271,20 @@
                 performStatusUpdate(cell, 2);
             });
 
-            // Handle Modal Triggers
-            table.addEventListener('click', function(e) {
+            // Handle Order Number click — open modal with flash animation
+            table.addEventListener('click', function (e) {
                 const trigger = e.target.closest('.session-trigger');
-                if (trigger) {
-                    const sessionData = JSON.parse(trigger.getAttribute('data-session'));
-                    openSessionModal(sessionData);
+                if (!trigger) return;
+
+                // Flash the parent order-cell
+                const cell = trigger.closest('.order-cell');
+                if (cell) {
+                    cell.classList.add('flash-click');
+                    setTimeout(() => cell.classList.remove('flash-click'), 300);
                 }
+
+                const sessionData = JSON.parse(trigger.getAttribute('data-session'));
+                openSessionModal(sessionData);
             });
         });
 
@@ -242,16 +294,15 @@
 
             // Populate Dropdowns
             document.getElementById('modalCategory').value = session.CategoryID || '';
-
-            // Run filtering so Sub-Category list is correct for the loaded Category
             filterSubCategories();
-
             document.getElementById('modalSubCategory').value = session.SubCategoryID || '';
             document.getElementById('modalDepartment').value = session.DepartmentID || '';
 
+            // Populate Comments
             document.getElementById('modalCuratorComment').value = session.CuratorComment || '';
             document.getElementById('modalManagerComment').value = session.ManagerComment || '';
             document.getElementById('modalAssociateComment').value = session.AssociateComment || '';
+            document.getElementById('modalCustomerComment').value = session.CustomerComment || '';
 
             currentModal.show();
         }
@@ -263,7 +314,6 @@
 
             options.forEach(opt => {
                 if (!opt.value) return; // Skip placeholder
-
                 const parentId = opt.getAttribute('data-parent');
                 if (!categoryId || parentId === categoryId) {
                     opt.style.display = 'block';
@@ -275,6 +325,10 @@
         }
 
         async function saveSessionCuration() {
+            const saveBtn = document.getElementById('saveBtn');
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Saving...';
+
             const data = {
                 ResponseSessionId: parseInt(document.getElementById('modalSessionId').value),
                 CategoryID: document.getElementById('modalCategory').value ? parseInt(document.getElementById('modalCategory').value) : null,
@@ -282,7 +336,8 @@
                 DepartmentID: document.getElementById('modalDepartment').value ? parseInt(document.getElementById('modalDepartment').value) : null,
                 CuratorComment: document.getElementById('modalCuratorComment').value,
                 ManagerComment: document.getElementById('modalManagerComment').value,
-                AssociateComment: document.getElementById('modalAssociateComment').value
+                AssociateComment: document.getElementById('modalAssociateComment').value,
+                CustomerComment: document.getElementById('modalCustomerComment').value
             };
 
             const token = document.querySelector('input[name="__RequestVerificationToken"]').value;
@@ -293,11 +348,20 @@
                     headers: { 'Content-Type': 'application/json', 'RequestVerificationToken': token },
                     body: JSON.stringify(data)
                 });
+
                 if (response.ok) {
                     currentModal.hide();
                     location.reload();
+                } else {
+                    showToast('❌ Save failed (server error). Please try again.', 'bg-danger text-white');
                 }
-            } catch (error) { console.error(error); }
+            } catch (error) {
+                console.error(error);
+                showToast('❌ Save failed (network error). Please try again.', 'bg-danger text-white');
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.textContent = 'Save Changes';
+            }
         }
 
         async function performStatusUpdate(element, statusId) {
@@ -321,8 +385,21 @@
                     element.classList.remove('status-followup', 'status-recognition');
                     if (targetStatus === 1) element.classList.add('status-followup');
                     else if (targetStatus === 2) element.classList.add('status-recognition');
+                } else {
+                    showToast('❌ Status update failed. Please try again.', 'bg-danger text-white');
                 }
-            } catch (error) { console.error(error); }
+            } catch (error) {
+                console.error(error);
+                showToast('❌ Status update failed (network error).', 'bg-danger text-white');
+            }
+        }
+
+        function showToast(message, classes) {
+            const toastEl = document.getElementById('saveToast');
+            const toastMsg = document.getElementById('saveToastMessage');
+            toastEl.className = 'toast align-items-center border-0 ' + classes;
+            toastMsg.textContent = message;
+            saveToast.show();
         }
     </script>
 }
