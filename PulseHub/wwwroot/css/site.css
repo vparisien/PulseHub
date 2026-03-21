@@ -1,0 +1,316 @@
+html {
+    font-size: 14px;
+}
+
+
+
+@media (min-width: 768px) {
+    html {
+        font-size: 16px;
+    }
+}
+
+.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
+    box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
+}
+
+html {
+    position: relative;
+    min-height: 100%;
+}
+
+body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f8f9fa;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    background: linear-gradient(135deg, #0d6efd 0%, #003366 100%);
+    min-height: 100vh;
+    font-family: 'Segoe UI', Roboto, sans-serif;
+}
+
+
+th {
+    white-space: nowrap;
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 30px;
+    background-color: #ffffff;
+}
+
+.logo {
+    height: 40px;
+}
+
+.version {
+    font-size: 0.9rem;
+    color: #666;
+}
+
+.divider {
+    margin: 0;
+    border: none;
+    border-top: 2px solid #ddd;
+}
+
+.navbar {
+    display: flex;
+    justify-content: flex-start; /* keep items aligned from the left */
+    align-items: center;
+    background-color: #004080;
+    padding: 6px 24px; /* slightly smaller height */
+    gap: 24px; /* evenly spaced but not justified */
+    height: 52px;
+    width: auto;
+}
+
+    .navbar a {
+        color: white;
+        text-decoration: none;
+        padding: 6px 10px;
+        font-size: 0.95rem;
+        font-weight: 500;
+        white-space: nowrap; /* prevents wrapping */
+    }
+
+        .navbar a:hover {
+            background-color: #0059b3;
+            border-radius: 4px;
+        }
+
+.custom-navbar {
+    justify-content: flex-start !important;
+}
+
+.menu-action.disabled {
+    pointer-events: none;
+    opacity: 0.5;
+    text-decoration: none;
+}
+
+.content {
+    padding: 30px;
+}
+
+.table-container {
+    max-height: 500px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+}
+/* Common card styles */
+
+
+/* Card colors */
+
+.non-clickable-card {
+    transition: transform 0.2s, box-shadow 0.2s;
+    border: 2px solid;
+    border-radius: 6px;
+    margin-bottom: 10px; /* less vertical spacing */
+    padding: 10px;
+    font-size: 0.9rem; /* smaller text */
+}
+
+.clickable-card {
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    border: 2px solid;
+    border-radius: 6px;
+    margin-bottom: 10px; /* less vertical spacing */
+    padding: 10px;
+    font-size: 0.9rem; /* smaller text */
+}
+
+    .clickable-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+    }
+
+
+
+.card-columns-container {
+    display: flex;
+    justify-content: space-between;
+    gap: 15px;
+}
+
+.card-column {
+    flex: 1;
+    min-width: 10px;
+}
+
+.row-bonus-not-issued {
+    background-color: red;
+    color: white;
+}
+
+.row-sales-not-achieved {
+    background-color: yellow;
+}
+
+main {
+    flex: 1;
+    overflow-y: auto;
+    padding-bottom: 80px; /* space for bottom buttons */
+}
+
+.row {
+    margin: 0 auto;
+}
+
+.card {
+    border-radius: 16px;
+    border: none;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+
+
+.card-body {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.card-columns-container {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 8px;
+}
+
+.card-column {
+    flex: 1;
+}
+
+    .card-column strong {
+        display: block;
+        font-size: 0.9rem;
+        color: #333;
+    }
+
+    .card-column small {
+        display: block;
+        color: #555;
+    }
+
+.card-locked {
+    border-left: 6px solid #c0392b;
+    background: #f9e5e5 !important;
+}
+
+.card-exported {
+    border-left: 6px solid #27ae60;
+    background: #eaf7ef !important;
+}
+
+.card-imported {
+    border-left: 6px solid #2980b9;
+    background: #e8f1fb !important;
+}
+
+.bottom-controls {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background: #fff;
+    box-shadow: 0 -2px 6px rgba(0,0,0,0.1);
+    padding: 12px 24px;
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    z-index: 100;
+}
+
+
+.cards-scroll {
+    max-height: calc(100vh - 200px);
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+    padding-right: 16px; /* reserve space for scrollbar */
+}
+
+    /* Optional: keep a nice small scrollbar */
+    .cards-scroll::-webkit-scrollbar {
+        width: 8px;
+    }
+
+    .cards-scroll::-webkit-scrollbar-thumb {
+        background: rgba(0,0,0,0.2);
+        border-radius: 4px;
+    }
+
+
+.app-header {
+    background: rgba(0, 0, 0, 0.15);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.dashboard-card {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 160px;
+    font-size: 1.3rem;
+    font-weight: 600;
+    border-radius: 1rem;
+    color: #fff !important;
+    transition: all 0.25s ease-in-out;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+}
+
+    .dashboard-card:hover {
+        transform: translateY(-6px);
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.25);
+        text-decoration: none;
+    }
+
+    .dashboard-card i {
+        opacity: 0.9;
+    }
+
+footer {
+    margin-top: 80px;
+}
+
+.beta-banner {
+    width: 100%;
+    background-color: #dc3545; /* bright red */
+    color: #fff;
+    font-size: 1.2rem;
+    font-weight: 700;
+    text-align: center;
+    padding: 12px 0;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 1050;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.15);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* Push content down so banner doesn't overlap header */
+body {
+    padding-top: 60px; /* adjust depending on banner height */
+}
+/* Make cells interactive */
+.clickable-cell {
+    cursor: pointer;
+    transition: background-color 0.2s;
+    user-select: none;
+}
+
+    .clickable-cell:hover {
+        filter: brightness(0.95);
+    }

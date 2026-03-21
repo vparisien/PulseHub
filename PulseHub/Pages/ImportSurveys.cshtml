@@ -1,0 +1,33 @@
+﻿@page
+@model PulseHub.ImportSurveyModel
+@{
+    ViewData["Title"] = "Import NPS Survey";
+}
+
+<h2>Import NPS Survey</h2>
+
+<form method="post" enctype="multipart/form-data">
+    <div class="mb-3">
+        <label class="form-label">Survey Type</label>
+        <select asp-for="SurveyType" class="form-select" required>
+            <option value="">-- Select Survey Type --</option>
+            <option value="Store">Store</option>
+            <option value="Online">Online</option>
+        </select>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">CSV File</label>
+        <input asp-for="UploadFile" type="file" class="form-control" accept=".csv" required />
+    </div>
+
+    <button type="submit" class="btn btn-primary">Import</button>
+</form>
+
+@if (!string.IsNullOrEmpty(Model.ImportSummary))
+{
+    <hr />
+    <div class="alert alert-info">
+        <pre>@Model.ImportSummary</pre>
+    </div>
+}

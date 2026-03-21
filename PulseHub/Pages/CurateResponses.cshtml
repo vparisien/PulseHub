@@ -1,0 +1,328 @@
+﻿@page
+@model PulseHub.CurateResponsesPivotModel
+@{
+    ViewData["Title"] = "Curate Responses";
+}
+
+<style>
+    /* Status background colors */
+    .status-followup {
+        background-color: #ffcccc !important;
+    }
+
+    .status-recognition {
+        background-color: #ccffcc !important;
+    }
+
+    /* Make cells interactive */
+    .clickable-cell {
+        cursor: pointer;
+        transition: background-color 0.2s;
+        user-select: none;
+        padding: 8px !important;
+        border: 1px solid #dee2e6;
+    }
+
+        .clickable-cell:hover {
+            filter: brightness(0.95);
+            background-color: rgba(0,0,0,0.05);
+        }
+
+    .order-link {
+        cursor: pointer;
+        text-decoration: underline;
+        color: #0d6efd;
+    }
+</style>
+
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold mb-0">Survey Responses</h2>
+            <small class="text-muted">Consolidated view (Multi-language grouped by Question Mapping)</small>
+        </div>
+    </div>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <form method="post" id="filterForm">
+                @Html.AntiForgeryToken()
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">Start Date</label>
+                        <input type="date" asp-for="StartDate" class="form-control" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">End Date</label>
+                        <input type="date" asp-for="EndDate" class="form-control" />
+                    </div>
+                    <div class="col-md-2">
+                        <button type="submit" class="btn btn-primary w-100">Filter Results</button>
+                    </div>
+                    <div class="col-md-2">
+                        <a asp-page="./CurateResponsesPivot" class="btn btn-outline-secondary w-100">Reset</a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    @if (Model.PivotedResponses != null && Model.PivotedResponses.Any())
+    {
+        <div class="card shadow-sm">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover table-sm mb-0 align-middle" id="responsesTable">
+                        <thead class="table-dark">
+                            <tr>
+                                <th class="ps-3">Date</th>
+                                <th>Customer</th>
+                                <th>Lang</th>
+                                <th>Order #</th>
+                                @foreach (var question in Model.Questions)
+                                {
+                                    <th style="min-width: 200px;">@question</th>
+                                }
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var session in Model.PivotedResponses)
+                            {
+                                <tr>
+                                    <td class="text-nowrap ps-3">
+                                        @session.TransactionDate.ToString("yyyy-MM-dd")
+                                    </td>
+                                    <td>
+                                        <div class="fw-bold">@session.FirstName</div>
+                                        <div class="text-muted small">@session.Email</div>
+                                    </td>
+                                    <td>
+                                        <span class="badge @(session.Language != null && session.Language.Contains("French", StringComparison.OrdinalIgnoreCase) ? "bg-info" : "bg-secondary")">
+                                            @(string.IsNullOrEmpty(session.Language) ? "NA" : session.Language.Substring(0, 2).ToUpper())
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <code class="order-link session-trigger"
+                                              data-session='@System.Text.Json.JsonSerializer.Serialize(session)'>
+                                            @session.OrderNumber
+                                        </code>
+                                    </td>
+                                    @foreach (var question in Model.Questions)
+                                    {
+                                        session.AnswersByQuestion.TryGetValue(question, out var resp);
+                                        var statusClass = resp?.StatusID == 1 ? "status-followup" : (resp?.StatusID == 2 ? "status-recognition" : "");
+
+                                        <td class="clickable-cell @statusClass"
+                                            data-response-id="@resp?.ResponseID">
+                                            @resp?.AnswerText
+                                        </td>
+                                    }
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<div class="modal fade" id="sessionModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title">Session Curation: <span id="modalOrderNum"></span></h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="sessionForm">
+                    <input type="hidden" id="modalSessionId" />
+
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">Category</label>
+                            <select id="modalCategory" class="form-select" onchange="filterSubCategories()">
+                                <option value="">-- Select --</option>
+                                @foreach (var cat in Model.Categories)
+                                {
+                                    <option value="@cat.CategoryID">@cat.Category</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">Sub-Category</label>
+                            <select id="modalSubCategory" class="form-select">
+                                <option value="">-- Select --</option>
+                                @foreach (var sub in Model.SubCategories)
+                                {
+                                    <option value="@sub.SubCategoryID" data-parent="@sub.CategoryID">@sub.SubCategory</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">Department</label>
+                            <select id="modalDepartment" class="form-select">
+                                <option value="">-- Select --</option>
+                                @foreach (var dept in Model.Departments)
+                                {
+                                    <option value="@dept.DepartmentID">@dept.Department</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Curator Comment</label>
+                        <textarea id="modalCuratorComment" class="form-control" rows="2"></textarea>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold small">Manager Comment</label>
+                            <textarea id="modalManagerComment" class="form-control form-control-sm" rows="2"></textarea>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold small">Associate Comment</label>
+                            <textarea id="modalAssociateComment" class="form-control form-control-sm" rows="2"></textarea>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" onclick="saveSessionCuration()">Save Changes</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script type="text/javascript">
+        let currentModal;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            currentModal = new bootstrap.Modal(document.getElementById('sessionModal'));
+            const table = document.getElementById('responsesTable');
+            if (!table) return;
+
+            // Handle Single and Double Clicks for Status Updates
+            table.addEventListener('click', function(e) {
+                const cell = e.target.closest('.clickable-cell');
+                if (!cell) return;
+
+                if (cell.clickTimer) clearTimeout(cell.clickTimer);
+                cell.clickTimer = setTimeout(function() {
+                    if (!cell.isDoubleClick) performStatusUpdate(cell, 1);
+                    cell.isDoubleClick = false;
+                }, 250);
+            });
+
+            table.addEventListener('dblclick', function (e) {
+                const cell = e.target.closest('.clickable-cell');
+                if (!cell) return;
+
+                if (cell.clickTimer) clearTimeout(cell.clickTimer);
+                cell.isDoubleClick = true;
+                performStatusUpdate(cell, 2);
+            });
+
+            // Handle Modal Triggers
+            table.addEventListener('click', function(e) {
+                const trigger = e.target.closest('.session-trigger');
+                if (trigger) {
+                    const sessionData = JSON.parse(trigger.getAttribute('data-session'));
+                    openSessionModal(sessionData);
+                }
+            });
+        });
+
+        function openSessionModal(session) {
+            document.getElementById('modalOrderNum').innerText = session.OrderNumber || 'N/A';
+            document.getElementById('modalSessionId').value = session.ResponseSessionID || 0;
+
+            // Populate Dropdowns
+            document.getElementById('modalCategory').value = session.CategoryID || '';
+
+            // Run filtering so Sub-Category list is correct for the loaded Category
+            filterSubCategories();
+
+            document.getElementById('modalSubCategory').value = session.SubCategoryID || '';
+            document.getElementById('modalDepartment').value = session.DepartmentID || '';
+
+            document.getElementById('modalCuratorComment').value = session.CuratorComment || '';
+            document.getElementById('modalManagerComment').value = session.ManagerComment || '';
+            document.getElementById('modalAssociateComment').value = session.AssociateComment || '';
+
+            currentModal.show();
+        }
+
+        function filterSubCategories() {
+            const categoryId = document.getElementById('modalCategory').value;
+            const subCatSelect = document.getElementById('modalSubCategory');
+            const options = subCatSelect.querySelectorAll('option');
+
+            options.forEach(opt => {
+                if (!opt.value) return; // Skip placeholder
+
+                const parentId = opt.getAttribute('data-parent');
+                if (!categoryId || parentId === categoryId) {
+                    opt.style.display = 'block';
+                } else {
+                    opt.style.display = 'none';
+                    if (subCatSelect.value === opt.value) subCatSelect.value = "";
+                }
+            });
+        }
+
+        async function saveSessionCuration() {
+            const data = {
+                ResponseSessionId: parseInt(document.getElementById('modalSessionId').value),
+                CategoryID: document.getElementById('modalCategory').value ? parseInt(document.getElementById('modalCategory').value) : null,
+                SubCategoryID: document.getElementById('modalSubCategory').value ? parseInt(document.getElementById('modalSubCategory').value) : null,
+                DepartmentID: document.getElementById('modalDepartment').value ? parseInt(document.getElementById('modalDepartment').value) : null,
+                CuratorComment: document.getElementById('modalCuratorComment').value,
+                ManagerComment: document.getElementById('modalManagerComment').value,
+                AssociateComment: document.getElementById('modalAssociateComment').value
+            };
+
+            const token = document.querySelector('input[name="__RequestVerificationToken"]').value;
+
+            try {
+                const response = await fetch('?handler=UpdateSession', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'RequestVerificationToken': token },
+                    body: JSON.stringify(data)
+                });
+                if (response.ok) {
+                    currentModal.hide();
+                    location.reload();
+                }
+            } catch (error) { console.error(error); }
+        }
+
+        async function performStatusUpdate(element, statusId) {
+            const responseId = element.getAttribute('data-response-id');
+            if (!responseId) return;
+
+            let targetStatus = statusId;
+            if (statusId === 1 && element.classList.contains('status-followup')) targetStatus = 0;
+            else if (statusId === 2 && element.classList.contains('status-recognition')) targetStatus = 0;
+
+            const token = document.querySelector('input[name="__RequestVerificationToken"]').value;
+
+            try {
+                const response = await fetch('?handler=UpdateStatus', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'RequestVerificationToken': token },
+                    body: JSON.stringify({ responseId: parseInt(responseId), statusId: targetStatus })
+                });
+
+                if (response.ok) {
+                    element.classList.remove('status-followup', 'status-recognition');
+                    if (targetStatus === 1) element.classList.add('status-followup');
+                    else if (targetStatus === 2) element.classList.add('status-recognition');
+                }
+            } catch (error) { console.error(error); }
+        }
+    </script>
+}
