@@ -111,6 +111,7 @@
                         <thead class="table-dark">
                             <tr>
                                 <th class="ps-3">Date</th>
+                                <th>Store #</th>
                                 <th>Customer</th>
                                 <th>Lang</th>
                                 <th>Order #</th>
@@ -126,6 +127,9 @@
                                 <tr>
                                     <td class="text-nowrap ps-3">
                                         @session.TransactionDate.ToString("yyyy-MM-dd")
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-secondary">@session.StoreNumber?.Trim()</span>
                                     </td>
                                     <td>
                                         <div class="fw-bold">@session.FirstName</div>

@@ -130,6 +130,7 @@ namespace PulseHub
                     s.FirstName, 
                     s.Language, 
                     s.OrderNumber,
+                    s.StoreNumber,
                     s.CategoryID,
                     s.SubCategoryID,
                     s.DepartmentID,
@@ -164,6 +165,7 @@ namespace PulseHub
                         FirstName = f.FirstName,
                         Language = f.Language,
                         OrderNumber = f.OrderNumber,
+                        StoreNumber = f.StoreNumber,
                         CategoryID = f.CategoryID,
                         SubCategoryID = f.SubCategoryID,
                         DepartmentID = f.DepartmentID,
@@ -194,6 +196,7 @@ namespace PulseHub
             public string? FirstName { get; set; }
             public string? Language { get; set; }
             public string? OrderNumber { get; set; }
+            public string? StoreNumber { get; set; }
             public int? CategoryID { get; set; }
             public int? SubCategoryID { get; set; }
             public int? DepartmentID { get; set; }
@@ -243,6 +246,7 @@ namespace PulseHub
             public string? FirstName { get; set; }
             public string? Language { get; set; }
             public string? OrderNumber { get; set; }
+            public string? StoreNumber { get; set; }
             public int? CategoryID { get; set; }
             public int? SubCategoryID { get; set; }
             public int? DepartmentID { get; set; }

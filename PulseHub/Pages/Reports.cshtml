@@ -4,220 +4,48 @@
     ViewData["Title"] = "Reports";
 }
 
-<div class="container-fluid mt-4">
-
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h2 class="fw-bold mb-0">Reports</h2>
-            <small class="text-muted">Survey analytics and follow-up tracking</small>
-        </div>
+<div class="container mt-5">
+    <div class="text-center mb-5">
+        <h2 class="fw-bold">Reports</h2>
+        <p class="text-muted">Select a report to view</p>
     </div>
 
-    <!-- Report Selector Tabs -->
-    <ul class="nav nav-tabs mb-0" id="reportTabs">
-        <li class="nav-item">
-            <a class="nav-link @(Model.ActiveReport == "recognition" ? "active fw-semibold" : "")"
-               href="?ActiveReport=recognition&StartDate=@Model.StartDate?.ToString("yyyy-MM-dd")&EndDate=@Model.EndDate?.ToString("yyyy-MM-dd")">
-                <i class="bi bi-star-fill text-success me-1"></i> Recognition
-            </a>
-        </li>
-        <li class="nav-item">
-            <a class="nav-link @(Model.ActiveReport == "followup" ? "active fw-semibold" : "")"
-               href="?ActiveReport=followup&StartDate=@Model.StartDate?.ToString("yyyy-MM-dd")&EndDate=@Model.EndDate?.ToString("yyyy-MM-dd")">
-                <i class="bi bi-flag-fill text-danger me-1"></i> Follow-up Status
-            </a>
-        </li>
-    </ul>
+    <div class="row row-cols-1 row-cols-md-2 g-4 justify-content-center">
 
-    <!-- Filter Bar -->
-    <div class="card shadow-sm border-top-0 rounded-0 rounded-bottom mb-4">
-        <div class="card-body py-3">
-            <form method="get">
-                <input type="hidden" name="ActiveReport" value="@Model.ActiveReport" />
-                <div class="row g-3 align-items-end">
-                    <div class="col-md-3">
-                        <label class="form-label fw-semibold">Start Date</label>
-                        <input type="date" name="StartDate" value="@Model.StartDate?.ToString("yyyy-MM-dd")" class="form-control" />
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label fw-semibold">End Date</label>
-                        <input type="date" name="EndDate" value="@Model.EndDate?.ToString("yyyy-MM-dd")" class="form-control" />
-                    </div>
-                    <div class="col-md-2">
-                        <button type="submit" class="btn btn-primary w-100">
-                            <i class="bi bi-funnel me-1"></i> Apply
-                        </button>
-                    </div>
-                    <div class="col-md-2">
-                        <a href="?ActiveReport=@Model.ActiveReport" class="btn btn-outline-secondary w-100">Reset</a>
-                    </div>
-                    <div class="col-md-2 text-end">
-                        <small class="text-muted">@(Model.ActiveReport == "recognition" ? Model.RecognitionRows.Count : Model.FollowupRows.Count) records</small>
+        <div class="col">
+            <a href="/Reports/Recognition" class="text-decoration-none">
+                <div class="card shadow-sm h-100 border-success report-card">
+                    <div class="card-body text-center py-5">
+                        <i class="bi bi-star-fill text-success mb-3" style="font-size: 3rem;"></i>
+                        <h4 class="fw-bold text-success">Recognition</h4>
+                        <p class="text-muted mb-0">Employees recognized by customers in survey responses (green flagged). Filter by date range.</p>
                     </div>
                 </div>
-            </form>
+            </a>
         </div>
+
+        <div class="col">
+            <a href="/Reports/Followup" class="text-decoration-none">
+                <div class="card shadow-sm h-100 border-danger report-card">
+                    <div class="card-body text-center py-5">
+                        <i class="bi bi-flag-fill text-danger mb-3" style="font-size: 3rem;"></i>
+                        <h4 class="fw-bold text-danger">Follow-up Status</h4>
+                        <p class="text-muted mb-0">Curated items flagged for manager follow-up. Color coded by action status.</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+
     </div>
-
-    <!-- ===================== RECOGNITION REPORT ===================== -->
-    @if (Model.ActiveReport == "recognition")
-    {
-        if (Model.RecognitionRows.Any())
-        {
-            <div class="card shadow-sm">
-                <div class="card-body p-0">
-                    <div class="table-responsive">
-                        <table class="table table-hover table-sm mb-0 align-middle">
-                            <thead class="table-dark">
-                                <tr>
-                                    <th class="ps-3">Date</th>
-                                    <th>Store</th>
-                                    <th>Employee</th>
-                                    <th>Customer</th>
-                                    <th>Comment</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var row in Model.RecognitionRows)
-                                {
-                                    <tr>
-                                        <td class="text-nowrap ps-3">@row.TransactionDate.ToString("yyyy-MM-dd")</td>
-                                        <td>
-                                            <span class="badge bg-secondary">@row.StoreNumber?.Trim()</span>
-                                        </td>
-                                        <td>
-                                            @if (!string.IsNullOrEmpty(row.EmployeeName))
-                                            {
-                                                <div class="fw-bold text-success">@row.EmployeeName</div>
-                                                <div class="text-muted small">#@row.EmployeeID</div>
-                                                @if (!string.IsNullOrEmpty(row.JobTitle))
-                                                {
-                                                    <div class="text-muted small fst-italic">@row.JobTitle</div>
-                                                }
-                                            }
-                                            else
-                                            {
-                                                <span class="text-muted fst-italic">ID: @row.EmployeeID</span>
-                                            }
-                                        </td>
-                                        <td>
-                                            <div>@row.CustomerName</div>
-                                            <div class="text-muted small">@row.CustomerEmail</div>
-                                        </td>
-                                        <td class="text-muted small" style="max-width:300px;">@row.AnswerText</td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        }
-        else
-        {
-            <div class="alert alert-info mt-3">
-                <i class="bi bi-info-circle me-2"></i>No recognition entries found for the selected date range.
-            </div>
-        }
-    }
-
-    <!-- ===================== FOLLOWUP REPORT ===================== -->
-    @if (Model.ActiveReport == "followup")
-    {
-        if (Model.FollowupRows.Any())
-        {
-            var pending = Model.FollowupRows.Count(r => r.ActionStatus == "Pending");
-            var actioned = Model.FollowupRows.Count(r => r.ActionStatus == "Actioned");
-
-            <div class="d-flex gap-3 mb-3">
-                <div class="badge bg-danger fs-6 px-3 py-2">
-                    <i class="bi bi-hourglass-split me-1"></i> Pending: @pending
-                </div>
-                <div class="badge bg-success fs-6 px-3 py-2">
-                    <i class="bi bi-check-circle me-1"></i> Actioned: @actioned
-                </div>
-            </div>
-
-            <div class="card shadow-sm">
-                <div class="card-body p-0">
-                    <div class="table-responsive">
-                        <table class="table table-sm mb-0 align-middle">
-                            <thead class="table-dark">
-                                <tr>
-                                    <th class="ps-3">Status</th>
-                                    <th>Date</th>
-                                    <th>Store</th>
-                                    <th>Assigned To</th>
-                                    <th>Customer</th>
-                                    <th>Flagged</th>
-                                    <th>Responded</th>
-                                    <th>Comment</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var row in Model.FollowupRows)
-                                {
-                                    var isPending = row.ActionStatus == "Pending";
-                                    <tr class="@(isPending ? "table-danger" : "table-success")">
-                                        <td class="ps-3">
-                                            @if (isPending)
-                                            {
-                                                <span class="badge bg-danger"><i class="bi bi-hourglass-split me-1"></i>Pending</span>
-                                            }
-                                            else
-                                            {
-                                                <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Actioned</span>
-                                            }
-                                        </td>
-                                        <td class="text-nowrap">@row.TransactionDate.ToString("yyyy-MM-dd")</td>
-                                        <td><span class="badge bg-secondary">@row.StoreNumber?.Trim()</span></td>
-                                        <td>
-                                            @if (!string.IsNullOrEmpty(row.ManagerName))
-                                            {
-                                                <div class="fw-bold">@row.ManagerName</div>
-                                                <div class="text-muted small">#@row.AssignedTo</div>
-                                                @if (!string.IsNullOrEmpty(row.ManagerTitle))
-                                                {
-                                                    <div class="text-muted small fst-italic">@row.ManagerTitle</div>
-                                                }
-                                            }
-                                            else
-                                            {
-                                                <span class="text-muted fst-italic">#@row.AssignedTo</span>
-                                            }
-                                        </td>
-                                        <td>
-                                            <div>@row.CustomerName</div>
-                                            <div class="text-muted small">@row.CustomerEmail</div>
-                                        </td>
-                                        <td class="text-nowrap small">@row.CuratedAt?.ToString("yyyy-MM-dd")</td>
-                                        <td class="text-nowrap small">
-                                            @if (row.RespondedAt.HasValue)
-                                            {
-                                                @row.RespondedAt.Value.ToString("yyyy-MM-dd")
-                                            }
-                                            else
-                                            {
-                                                <span class="text-danger fst-italic">—</span>
-                                            }
-                                        </td>
-                                        <td class="text-muted small" style="max-width:280px;">@row.AnswerText</td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        }
-        else
-        {
-            <div class="alert alert-info mt-3">
-                <i class="bi bi-info-circle me-2"></i>No follow-up items found for the selected date range.
-            </div>
-        }
-    }
-
 </div>
 
-<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet" />
+<style>
+    .report-card {
+        transition: transform 0.15s, box-shadow 0.15s;
+        cursor: pointer;
+    }
+    .report-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 24px rgba(0,0,0,0.12) !important;
+    }
+</style>

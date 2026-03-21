@@ -1,0 +1,100 @@
+@page
+@model PulseHub.Pages.Reports.RecognitionModel
+@{
+    ViewData["Title"] = "Recognition Report";
+}
+
+<div class="container-fluid mt-4">
+    <div class="d-flex align-items-center mb-4 gap-3">
+        <a href="/Reports" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left me-1"></i> Reports
+        </a>
+        <div>
+            <h2 class="fw-bold mb-0"><i class="bi bi-star-fill text-success me-2"></i>Recognition Report</h2>
+            <small class="text-muted">Employees recognized by customers in green-flagged responses</small>
+        </div>
+    </div>
+
+    <!-- Filter Bar -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-body py-3">
+            <form method="get">
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">Start Date</label>
+                        <input type="date" name="StartDate" value="@Model.StartDate?.ToString("yyyy-MM-dd")" class="form-control" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">End Date</label>
+                        <input type="date" name="EndDate" value="@Model.EndDate?.ToString("yyyy-MM-dd")" class="form-control" />
+                    </div>
+                    <div class="col-md-2">
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="bi bi-funnel me-1"></i> Apply
+                        </button>
+                    </div>
+                    <div class="col-md-2">
+                        <a href="/Reports/Recognition" class="btn btn-outline-secondary w-100">Reset</a>
+                    </div>
+                    <div class="col-auto ms-auto text-muted small align-self-center">
+                        @Model.Rows.Count record(s)
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    @if (Model.Rows.Any())
+    {
+        <div class="card shadow-sm">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover table-sm mb-0 align-middle">
+                        <thead class="table-dark">
+                            <tr>
+                                <th class="ps-3">Date</th>
+                                <th>Store #</th>
+                                <th>Employee</th>
+                                <th>Job Title</th>
+                                <th>Customer</th>
+                                <th>Comment</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var row in Model.Rows)
+                            {
+                                <tr>
+                                    <td class="text-nowrap ps-3">@row.TransactionDate.ToString("yyyy-MM-dd")</td>
+                                    <td><span class="badge bg-secondary">@row.StoreNumber?.Trim()</span></td>
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(row.EmployeeName))
+                                        {
+                                            <div class="fw-bold text-success">@row.EmployeeName</div>
+                                            <div class="text-muted small">#@row.EmployeeID</div>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted fst-italic">ID: @row.EmployeeID</span>
+                                        }
+                                    </td>
+                                    <td class="text-muted small">@row.JobTitle</td>
+                                    <td>
+                                        <div>@row.CustomerName</div>
+                                        <div class="text-muted small">@row.CustomerEmail</div>
+                                    </td>
+                                    <td class="text-muted small" style="max-width:300px;">@row.AnswerText</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle me-2"></i>No recognition entries found for the selected date range.
+        </div>
+    }
+</div>
