@@ -62,11 +62,11 @@ namespace PulseHub.Pages.Reports
                     MAX(r.RespondedAt)                              AS RespondedAt,
                     COUNT(r.ResponseID)                             AS FlaggedCount,
                     STUFF((
-                        SELECT ' | ' + CAST(r2.AnswerText AS NVARCHAR(MAX))
+                        SELECT '||' + CAST(r2.AnswerText AS NVARCHAR(MAX))
                         FROM PulseHub_Response r2
                         WHERE r2.ResponseSessionID = s.ResponseSessionID AND r2.StatusID = 1
                         FOR XML PATH(''), TYPE
-                    ).value('.', 'NVARCHAR(MAX)'), 1, 3, '')            AS AnswerText,
+                    ).value('.', 'NVARCHAR(MAX)'), 1, 2, '')            AS AnswerText,
                     CASE
                         WHEN MAX(r.RespondedAt) IS NOT NULL THEN 'Actioned'
                         ELSE 'Pending'

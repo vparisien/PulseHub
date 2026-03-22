@@ -4,6 +4,36 @@
     ViewData["Title"] = "Recognition Report";
 }
 
+@section Scripts {
+<style>
+    th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+    th.sortable:hover { background-color: rgba(255,255,255,0.1); }
+    th.sortable .sort-icon { opacity: 0.4; font-size: 0.75rem; }
+    th.sortable.asc .sort-icon::before { content: "▲"; opacity: 1; }
+    th.sortable.desc .sort-icon::before { content: "▼"; opacity: 1; }
+    th.sortable.asc .sort-icon, th.sortable.desc .sort-icon { opacity: 1; }
+</style>
+<script>
+    document.querySelectorAll('th.sortable').forEach(th => {
+        th.addEventListener('click', function () {
+            const table = this.closest('table');
+            const tbody = table.querySelector('tbody');
+            const col = parseInt(this.getAttribute('data-col'));
+            const asc = !this.classList.contains('asc');
+            table.querySelectorAll('th.sortable').forEach(h => h.classList.remove('asc', 'desc'));
+            this.classList.add(asc ? 'asc' : 'desc');
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            rows.sort((a, b) => {
+                const av = a.cells[col]?.innerText.trim() ?? '';
+                const bv = b.cells[col]?.innerText.trim() ?? '';
+                return asc ? av.localeCompare(bv, undefined, { numeric: true }) : bv.localeCompare(av, undefined, { numeric: true });
+            });
+            rows.forEach(r => tbody.appendChild(r));
+        });
+    });
+</script>
+}
+
 <div class="container-fluid mt-4">
     <div class="d-flex align-items-center mb-4 gap-3">
         <a href="/Reports" class="btn btn-outline-secondary btn-sm">
@@ -52,11 +82,11 @@
                     <table class="table table-hover table-sm mb-0 align-middle">
                         <thead class="table-dark">
                             <tr>
-                                <th class="ps-3">Date</th>
-                                <th>Store #</th>
-                                <th>Employee</th>
-                                <th>Job Title</th>
-                                <th>Customer</th>
+                                <th class="ps-3 sortable" data-col="0">Date <span class="sort-icon">⇅</span></th>
+                                <th class="sortable" data-col="1">Store # <span class="sort-icon">⇅</span></th>
+                                <th class="sortable" data-col="2">Employee <span class="sort-icon">⇅</span></th>
+                                <th class="sortable" data-col="3">Job Title <span class="sort-icon">⇅</span></th>
+                                <th class="sortable" data-col="4">Customer <span class="sort-icon">⇅</span></th>
                                 <th>Comment</th>
                             </tr>
                         </thead>
