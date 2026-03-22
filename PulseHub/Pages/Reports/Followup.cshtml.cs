@@ -61,6 +61,7 @@ namespace PulseHub.Pages.Reports
                     MIN(r.CuratedAt)                                AS CuratedAt,
                     MAX(r.RespondedAt)                              AS RespondedAt,
                     COUNT(r.ResponseID)                             AS FlaggedCount,
+                    STRING_AGG(CAST(r.AnswerText AS NVARCHAR(MAX)), ' | ') AS AnswerText,
                     CASE
                         WHEN MAX(r.RespondedAt) IS NOT NULL THEN 'Actioned'
                         ELSE 'Pending'
@@ -138,6 +139,7 @@ namespace PulseHub.Pages.Reports
             public DateTime? CuratedAt { get; set; }
             public DateTime? RespondedAt { get; set; }
             public int FlaggedCount { get; set; }
+            public string? AnswerText { get; set; }
             public string? ActionStatus { get; set; }
         }
 
