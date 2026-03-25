@@ -82,10 +82,7 @@ namespace PulseHub
 
                 if (!string.IsNullOrEmpty(orderNumber))
                 {
-                    var (strippedId, rawId, error) = await LookupShopifyAssociateAsync(
-                        orderNumber,
-                        transDate.AddMonths(-3),
-                        transDate.AddMonths(3));
+                    var (strippedId, rawId, error) = await LookupShopifyAssociateAsync(orderNumber);
 
                     recognitionDebug.ShopifyRawId = rawId;
                     recognitionDebug.AssocIdStripped = strippedId;
@@ -153,7 +150,7 @@ namespace PulseHub
 
         // ── Shopify single-order lookup (LSInterfaceDB) ─────────────────────
         private async Task<(string? stripped, string? raw, string? error)> LookupShopifyAssociateAsync(
-            string orderNumber, DateTime minDate, DateTime maxDate)
+            string orderNumber)
         {
             try
             {
@@ -173,8 +170,7 @@ namespace PulseHub
                     WHERE a.orderName = '{safeOrder}'
                       AND b.associateId IS NOT NULL
                       AND b.associateId <> ''
-                      AND TRY_CAST(b.associateId AS BIGINT) > 0
-                      AND a.CreatedAt BETWEEN '{minDate:yyyy-MM-dd}' AND '{maxDate:yyyy-MM-dd}'";
+                      AND TRY_CAST(b.associateId AS BIGINT) > 0";
 
                 using var conn = new SqlConnection(connStr);
                 await conn.OpenAsync();
