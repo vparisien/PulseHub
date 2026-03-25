@@ -421,9 +421,36 @@
                 });
 
                 if (response.ok) {
+                    const data = await response.json();
                     element.classList.remove('status-followup', 'status-recognition');
                     if (targetStatus === 1) element.classList.add('status-followup');
                     else if (targetStatus === 2) element.classList.add('status-recognition');
+
+                    // Show recognition debug info when green-flagging
+                    if (targetStatus === 2 && data.recognitionDebug) {
+                        const d = data.recognitionDebug;
+                        const note = d.note || '';
+                        const err = d.shopifyError || '';
+                        let msg = '';
+
+                        if (d.employeeFound) {
+                            msg = `✅ Recognition: ${d.employeeName} (ID: ${d.assocIdStripped}) [${d.jobTitle || ''}]`;
+                            showToast(msg, 'bg-success text-white', 6000);
+                        } else if (err) {
+                            msg = `⚠️ Shopify error: ${err}`;
+                            showToast(msg, 'bg-danger text-white', 8000);
+                        } else if (d.assocIdStripped) {
+                            msg = `⚠️ Shopify ID ${d.assocIdStripped} (raw: ${d.shopifyRawId}) not found in LSCentral`;
+                            showToast(msg, 'bg-warning text-dark', 8000);
+                        } else if (note) {
+                            msg = `⚠️ ${note} [Order: ${d.orderNumber}]`;
+                            showToast(msg, 'bg-warning text-dark', 8000);
+                        } else {
+                            msg = `⚠️ No associate found for order ${d.orderNumber}`;
+                            showToast(msg, 'bg-warning text-dark', 6000);
+                        }
+                        console.log('Recognition debug:', d);
+                    }
                 } else {
                     showToast('❌ Status update failed. Please try again.', 'bg-danger text-white');
                 }
@@ -433,11 +460,13 @@
             }
         }
 
-        function showToast(message, classes) {
+        function showToast(message, classes, delay) {
             const toastEl = document.getElementById('saveToast');
             const toastMsg = document.getElementById('saveToastMessage');
             toastEl.className = 'toast align-items-center border-0 ' + classes;
             toastMsg.textContent = message;
+            // Reinitialise with custom delay if provided
+            saveToast = new bootstrap.Toast(toastEl, { delay: delay || 4000 });
             saveToast.show();
         }
 

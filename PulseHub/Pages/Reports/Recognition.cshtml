@@ -66,61 +66,15 @@
                     <div class="col-md-2">
                         <a href="/Reports/Recognition" class="btn btn-outline-secondary w-100">Reset</a>
                     </div>
-                    <div class="col-auto ms-auto d-flex align-items-center gap-2">
-                        <span class="text-muted small">@Model.Rows.Count record(s)</span>
-                        <a href="?StartDate=@Model.StartDate?.ToString("yyyy-MM-dd")&EndDate=@Model.EndDate?.ToString("yyyy-MM-dd")&Debug=@(!Model.Debug)"
-                           class="btn btn-sm @(Model.Debug ? "btn-warning" : "btn-outline-secondary")">
-                            <i class="bi bi-bug me-1"></i>@(Model.Debug ? "Hide Debug" : "Debug")
-                        </a>
+                    <div class="col-auto ms-auto text-muted small align-self-center">
+                        @Model.Rows.Count record(s)
                     </div>
                 </div>
             </form>
         </div>
     </div>
 
-    @if (Model.Debug && Model.DebugLog.Any())
-    {
-        <div class="card border-warning shadow-sm mb-4">
-            <div class="card-header bg-warning text-dark fw-bold">
-                <i class="bi bi-bug me-1"></i> Lookup Debug — @Model.DebugLog.Count row(s)
-            </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-sm table-bordered mb-0 small">
-                        <thead class="table-dark">
-                            <tr>
-                                <th>ResponseID</th>
-                                <th>Order #</th>
-                                <th>RecognitionOf (before)</th>
-                                <th>Shopify Raw ID</th>
-                                <th>Stripped ID</th>
-                                <th>Employee Found?</th>
-                                <th>Employee Name</th>
-                                <th>Note</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var d in Model.DebugLog)
-                            {
-                                var rowClass = d.Note == "OK" ? "table-success" :
-                                               d.Note!.Contains("No order") ? "table-secondary" : "table-danger";
-                                <tr class="@rowClass">
-                                    <td>@d.ResponseID</td>
-                                    <td>@d.OrderNumber</td>
-                                    <td class="text-muted">@(d.RecognitionOfBefore ?? "—")</td>
-                                    <td>@(d.ShopifyRawId ?? "—")</td>
-                                    <td class="fw-bold">@(d.AssocIdStripped ?? "—")</td>
-                                    <td>@(d.EmployeeFound ? "✅" : "❌")</td>
-                                    <td>@d.EmployeeName</td>
-                                    <td>@d.Note</td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    }
+
 
     @if (Model.Rows.Any())
     {

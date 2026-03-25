@@ -1,16 +1,19 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Data.SqlClient;
 
 namespace PulseHub
 {
     public class CurateResponsesPivotModel : PageModel
     {
         private readonly PulseHubContext _context;
+        private readonly IConfiguration _config;
 
-        public CurateResponsesPivotModel(PulseHubContext context)
+        public CurateResponsesPivotModel(PulseHubContext context, IConfiguration config)
         {
             _context = context;
+            _config = config;
         }
 
         [BindProperty]
@@ -41,16 +44,16 @@ namespace PulseHub
             response.StatusID = request.StatusId;
             response.CuratedAt = DateTime.Now;
 
-            // When setting red (StatusID = 1), assign to the store manager
+            string? assignedTo = null;
+            RecognitionDebugInfo? recognitionDebug = null;
+
+            // ── Red flag (StatusID = 1): assign to store manager ──────────────
             if (request.StatusId == 1 && response.ResponseSession != null)
             {
                 var storeNumber = response.ResponseSession.StoreNumber;
-
                 if (!string.IsNullOrEmpty(storeNumber) && storeNumber != "WEB")
                 {
-                    // Strip whitespace and leading zeros to match vw_LSStoreMgmtInfo.StoreID
                     var storeId = storeNumber.Trim().TrimStart('0');
-
                     var managerSql = $@"
                         SELECT TOP 1 StoreManagerID
                         FROM [LSCentral].[dbo].[vw_LSStoreMgmtInfo]
@@ -62,22 +65,153 @@ namespace PulseHub
 
                     var managerId = result.FirstOrDefault()?.StoreManagerID;
                     if (managerId.HasValue)
+                    {
                         response.AssignedTo = managerId.Value.ToString();
+                        assignedTo = response.AssignedTo;
+                    }
                 }
             }
-            // When clearing red (StatusID != 1), clear AssignedTo if it was set by auto-assign
+
+            // ── Green flag (StatusID = 2): look up recognized associate ───────
+            else if (request.StatusId == 2 && response.ResponseSession != null)
+            {
+                var orderNumber = response.ResponseSession.OrderNumber;
+                var transDate = response.ResponseSession.TransactionDate;
+
+                recognitionDebug = new RecognitionDebugInfo { OrderNumber = orderNumber };
+
+                if (!string.IsNullOrEmpty(orderNumber))
+                {
+                    var (strippedId, rawId, error) = await LookupShopifyAssociateAsync(
+                        orderNumber,
+                        transDate.AddMonths(-3),
+                        transDate.AddMonths(3));
+
+                    recognitionDebug.ShopifyRawId = rawId;
+                    recognitionDebug.AssocIdStripped = strippedId;
+                    recognitionDebug.ShopifyError = error;
+
+                    if (!string.IsNullOrEmpty(strippedId))
+                    {
+                        response.RecognitionOf = strippedId;
+
+                        // Look up employee name for debug display
+                        try
+                        {
+                            var empSql = $@"
+                                SELECT TOP 1
+                                    CAST(employeeID AS VARCHAR)  AS EmployeeID,
+                                    employeeName                 AS EmployeeName,
+                                    jobTitleDescriptionEN        AS JobTitle
+                                FROM [LSCentral].[dbo].[vw_LSStoreEmployees]
+                                WHERE CAST(employeeID AS VARCHAR) = '{strippedId}'
+                                  AND endDate = '9999-12-31'";
+
+                            var empRows = await _context.Database
+                                .SqlQueryRaw<EmployeeLookupResult>(empSql)
+                                .ToListAsync();
+
+                            var emp = empRows.FirstOrDefault();
+                            recognitionDebug.EmployeeName = emp?.EmployeeName ?? "(not found in LSCentral)";
+                            recognitionDebug.JobTitle = emp?.JobTitle;
+                            recognitionDebug.EmployeeFound = emp != null;
+                        }
+                        catch (Exception ex)
+                        {
+                            recognitionDebug.EmployeeName = $"LSCentral error: {ex.Message}";
+                        }
+                    }
+                    else
+                    {
+                        recognitionDebug.Note = string.IsNullOrEmpty(error)
+                            ? "No Shopify match found for this order number"
+                            : $"Shopify error: {error}";
+                    }
+                }
+                else
+                {
+                    recognitionDebug.Note = "No order number on this session";
+                }
+            }
+
+            // ── Clearing status: remove assignments ───────────────────────────
             else if (request.StatusId != 1)
             {
                 response.AssignedTo = null;
             }
 
             await _context.SaveChangesAsync();
-            return new JsonResult(new { success = true, assignedTo = response.AssignedTo });
+
+            return new JsonResult(new
+            {
+                success = true,
+                assignedTo,
+                recognitionOf = response.RecognitionOf,
+                recognitionDebug
+            });
         }
 
-        private class StoreManagerResult
+        // ── Shopify single-order lookup (LSInterfaceDB) ─────────────────────
+        private async Task<(string? stripped, string? raw, string? error)> LookupShopifyAssociateAsync(
+            string orderNumber, DateTime minDate, DateTime maxDate)
         {
-            public int? StoreManagerID { get; set; }
+            try
+            {
+                var connStr = _config.GetConnectionString("LSInterfaceDB")!;
+                var safeOrder = orderNumber.Replace("'", "''");
+
+                var sql = @$"
+                    SELECT TOP 1
+                        b.associateId,
+                        REVERSE(SUBSTRING(
+                            REVERSE(CAST(TRY_CAST(b.associateId AS BIGINT) AS VARCHAR(20))),
+                            PATINDEX('%[^0]%', REVERSE(CAST(TRY_CAST(b.associateId AS BIGINT) AS VARCHAR(20)))),
+                            20
+                        )) AS associateIdStripped
+                    FROM [LSShopify].[dbo].[shopifyOrder] a
+                    INNER JOIN [LSShopify].[dbo].[shopifyOrderline] b ON a.OrderID = b.OrderID
+                    WHERE a.orderName = '{safeOrder}'
+                      AND b.associateId IS NOT NULL
+                      AND b.associateId <> ''
+                      AND TRY_CAST(b.associateId AS BIGINT) > 0
+                      AND a.CreatedAt BETWEEN '{minDate:yyyy-MM-dd}' AND '{maxDate:yyyy-MM-dd}'";
+
+                using var conn = new SqlConnection(connStr);
+                await conn.OpenAsync();
+                using var cmd = new SqlCommand(sql, conn);
+                using var reader = await cmd.ExecuteReaderAsync();
+                if (await reader.ReadAsync())
+                {
+                    var raw = reader["associateId"]?.ToString();
+                    var stripped = reader["associateIdStripped"]?.ToString();
+                    return (stripped, raw, null);
+                }
+                return (null, null, null);
+            }
+            catch (Exception ex)
+            {
+                return (null, null, ex.Message);
+            }
+        }
+
+        private class StoreManagerResult  { public int? StoreManagerID { get; set; } }
+        private class EmployeeLookupResult
+        {
+            public string? EmployeeID { get; set; }
+            public string? EmployeeName { get; set; }
+            public string? JobTitle { get; set; }
+        }
+
+        public class RecognitionDebugInfo
+        {
+            public string? OrderNumber { get; set; }
+            public string? ShopifyRawId { get; set; }
+            public string? AssocIdStripped { get; set; }
+            public string? ShopifyError { get; set; }
+            public bool EmployeeFound { get; set; }
+            public string? EmployeeName { get; set; }
+            public string? JobTitle { get; set; }
+            public string? Note { get; set; }
         }
 
         public async Task<IActionResult> OnPostUpdateSessionAsync([FromBody] UpdateSessionRequest request)
@@ -88,7 +222,6 @@ namespace PulseHub
             session.CategoryID = request.CategoryID;
             session.SubCategoryID = request.SubCategoryID;
             session.DepartmentID = request.DepartmentID;
-
             session.CuratorComment = request.CuratorComment;
             session.ManagerComment = request.ManagerComment;
             session.AssociateComment = request.AssociateComment;
@@ -102,9 +235,9 @@ namespace PulseHub
         private async Task LoadPivotedResponsesAsync()
         {
             // 1. Fetch Dropdown Data
-            Categories = await _context.PulseHub_Category.AsNoTracking().Where(x => x.Status == 1).OrderBy(x => x.Category).ToListAsync();
+            Categories    = await _context.PulseHub_Category.AsNoTracking().Where(x => x.Status == 1).OrderBy(x => x.Category).ToListAsync();
             SubCategories = await _context.PulseHub_SubCategory.AsNoTracking().Where(x => x.Status == 1).OrderBy(x => x.SubCategory).ToListAsync();
-            Departments = await _context.PulseHub_Department.AsNoTracking().Where(x => x.Status == 1).OrderBy(x => x.Department).ToListAsync();
+            Departments   = await _context.PulseHub_Department.AsNoTracking().Where(x => x.Status == 1).OrderBy(x => x.Department).ToListAsync();
 
             // 2. Get question mappings
             var questionMappings = await _context.PulseHub_Question.AsNoTracking().ToListAsync();
@@ -117,25 +250,26 @@ namespace PulseHub
                     return g.Select(x => new { Raw = x.Question, Canonical = header });
                 }).ToDictionary(x => x.Raw, x => x.Canonical);
 
-            // 3. RAW SQL — keep IDs as int? to avoid VARCHAR cast issues
+            // 3. Raw SQL
             var rawSql = @"
-                SELECT 
-                    r.ResponseID, 
-                    r.ResponseSessionID, 
-                    r.QuestionText, 
-                    r.AnswerText, 
+                SELECT
+                    r.ResponseID,
+                    r.ResponseSessionID,
+                    r.QuestionText,
+                    r.AnswerText,
                     r.StatusID,
-                    s.TransactionDate, 
-                    s.Email, 
-                    s.FirstName, 
-                    s.Language, 
+                    r.RecognitionOf,
+                    s.TransactionDate,
+                    s.Email,
+                    s.FirstName,
+                    s.Language,
                     s.OrderNumber,
                     s.StoreNumber,
                     s.CategoryID,
                     s.SubCategoryID,
                     s.DepartmentID,
-                    s.CuratorComment, 
-                    s.ManagerComment, 
+                    s.CuratorComment,
+                    s.ManagerComment,
                     s.AssociateComment,
                     s.CustomerComment,
                     s.Actionable
@@ -147,12 +281,13 @@ namespace PulseHub
             // 4. Filter and Pivot
             var filtered = rawData.Where(r =>
                 (!StartDate.HasValue || r.TransactionDate.Date >= StartDate.Value.Date) &&
-                (!EndDate.HasValue || r.TransactionDate.Date <= EndDate.Value.Date))
+                (!EndDate.HasValue   || r.TransactionDate.Date <= EndDate.Value.Date))
                 .ToList();
 
-            Questions = filtered.Select(r => lookup.ContainsKey(r.QuestionText ?? "") ? lookup[r.QuestionText!] : r.QuestionText ?? "")
-                                .Where(q => !string.IsNullOrEmpty(q))
-                                .Distinct().OrderBy(q => q).ToList();
+            Questions = filtered
+                .Select(r => lookup.ContainsKey(r.QuestionText ?? "") ? lookup[r.QuestionText!] : r.QuestionText ?? "")
+                .Where(q => !string.IsNullOrEmpty(q))
+                .Distinct().OrderBy(q => q).ToList();
 
             PivotedResponses = filtered.GroupBy(r => r.ResponseSessionID)
                 .Select(g => {
@@ -160,33 +295,36 @@ namespace PulseHub
                     return new PivotedResponse
                     {
                         ResponseSessionID = f.ResponseSessionID,
-                        TransactionDate = f.TransactionDate,
-                        Email = f.Email,
-                        FirstName = f.FirstName,
-                        Language = f.Language,
-                        OrderNumber = f.OrderNumber,
-                        StoreNumber = f.StoreNumber,
-                        CategoryID = f.CategoryID,
-                        SubCategoryID = f.SubCategoryID,
-                        DepartmentID = f.DepartmentID,
-                        CuratorComment = f.CuratorComment,
-                        ManagerComment = f.ManagerComment,
-                        AssociateComment = f.AssociateComment,
-                        CustomerComment = f.CustomerComment,
-                        Actionable = f.Actionable,
+                        TransactionDate   = f.TransactionDate,
+                        Email             = f.Email,
+                        FirstName         = f.FirstName,
+                        Language          = f.Language,
+                        OrderNumber       = f.OrderNumber,
+                        StoreNumber       = f.StoreNumber,
+                        CategoryID        = f.CategoryID,
+                        SubCategoryID     = f.SubCategoryID,
+                        DepartmentID      = f.DepartmentID,
+                        CuratorComment    = f.CuratorComment,
+                        ManagerComment    = f.ManagerComment,
+                        AssociateComment  = f.AssociateComment,
+                        CustomerComment   = f.CustomerComment,
+                        Actionable        = f.Actionable,
                         AnswersByQuestion = Questions.ToDictionary(
                             q => q,
                             q => g.Where(r => (lookup.ContainsKey(r.QuestionText ?? "") ? lookup[r.QuestionText!] : r.QuestionText ?? "") == q)
                                   .Select(r => new ResponseData
                                   {
-                                      ResponseID = r.ResponseID,
-                                      AnswerText = r.AnswerText,
-                                      StatusID = r.StatusID
+                                      ResponseID   = r.ResponseID,
+                                      AnswerText   = r.AnswerText,
+                                      StatusID     = r.StatusID,
+                                      RecognitionOf = r.RecognitionOf
                                   }).FirstOrDefault()
                         )
                     };
                 }).OrderByDescending(r => r.TransactionDate).ToList();
         }
+
+        // ── View Models ─────────────────────────────────────────────────────────
 
         public class PivotedResponse
         {
@@ -213,6 +351,7 @@ namespace PulseHub
             public int ResponseID { get; set; }
             public string? AnswerText { get; set; }
             public int? StatusID { get; set; }
+            public string? RecognitionOf { get; set; }
         }
 
         public class UpdateStatusRequest
@@ -231,7 +370,7 @@ namespace PulseHub
             public string? ManagerComment { get; set; }
             public string? AssociateComment { get; set; }
             public string? CustomerComment { get; set; }
-            public bool Actionable { get; set; } // stored as non-nullable in request
+            public bool Actionable { get; set; }
         }
 
         public class RawFlatResponse
@@ -241,6 +380,7 @@ namespace PulseHub
             public string? QuestionText { get; set; }
             public string? AnswerText { get; set; }
             public int? StatusID { get; set; }
+            public string? RecognitionOf { get; set; }
             public DateTime TransactionDate { get; set; }
             public string? Email { get; set; }
             public string? FirstName { get; set; }
