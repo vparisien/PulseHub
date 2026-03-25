@@ -168,8 +168,8 @@ namespace PulseHub
                             PATINDEX('%[^0]%', REVERSE(CAST(TRY_CAST(b.associateId AS BIGINT) AS VARCHAR(20)))),
                             20
                         )) AS associateIdStripped
-                    FROM [LSShopify].[dbo].[shopifyOrder] a
-                    INNER JOIN [LSShopify].[dbo].[shopifyOrderline] b ON a.OrderID = b.OrderID
+                    FROM [LSBoomidb].[LSShopify].[dbo].[shopifyOrder] a
+                    INNER JOIN [LSBoomidb].[LSShopify].[dbo].[shopifyOrderline] b ON a.OrderID = b.OrderID
                     WHERE a.orderName = '{safeOrder}'
                       AND b.associateId IS NOT NULL
                       AND b.associateId <> ''
