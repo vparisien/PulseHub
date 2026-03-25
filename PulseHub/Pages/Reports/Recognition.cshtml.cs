@@ -22,14 +22,18 @@ namespace PulseHub.Pages.Reports
         [BindProperty(SupportsGet = true)]
         public DateTime? EndDate { get; set; }
 
+        [BindProperty(SupportsGet = true)]
+        public bool Debug { get; set; }
+
         public List<RecognitionRow> Rows { get; set; } = new();
+        public List<DebugRow> DebugLog { get; set; } = new();
 
         public async Task OnGetAsync()
         {
             StartDate ??= DateTime.Today.AddDays(-30);
             EndDate ??= DateTime.Today;
 
-            // Step 1 — pull recognition responses from LSDEV (PulseHub tables)
+            // Step 1 — pull recognition responses from LSDEV
             var sql = @$"
                 SELECT
                     r.ResponseID,
@@ -39,7 +43,8 @@ namespace PulseHub.Pages.Reports
                     s.OrderNumber,
                     s.Email         AS CustomerEmail,
                     s.FirstName     AS CustomerName,
-                    r.AnswerText
+                    r.AnswerText,
+                    r.RecognitionOf AS RecognitionOf
                 FROM PulseHub_Response r
                 INNER JOIN PulseHub_ResponseSession s ON r.ResponseSessionID = s.ResponseSessionID
                 WHERE r.StatusID = 2
@@ -53,27 +58,23 @@ namespace PulseHub.Pages.Reports
 
             if (!baseRows.Any())
             {
-                Rows = new List<RecognitionRow>();
+                Rows = new();
                 return;
             }
 
-            // Step 2 — batch lookup associateId from LSShopify (LSInterfaceDB)
-            // associateId has trailing zeros (e.g. 6141500000 represents employee 61415)
-            // The 3-month window guards against stale/unrelated orders with the same number
+            // Step 2 — batch Shopify lookup
             var orderNumbers = baseRows
                 .Select(r => r.OrderNumber)
                 .Where(o => !string.IsNullOrEmpty(o))
                 .Distinct()
                 .ToList();
 
-            // Build date range for Shopify: widest window across all rows ± 3 months
             var minDate = baseRows.Min(r => r.TransactionDate).AddMonths(-3);
             var maxDate = baseRows.Max(r => r.TransactionDate).AddMonths(3);
 
-            // Map: orderNumber -> associateId (stripped of trailing zeros)
-            var shopifyMap = await LookupShopifyAssociatesAsync(orderNumbers, minDate, maxDate);
+            var (shopifyMap, shopifyDebug) = await LookupShopifyAssociatesAsync(orderNumbers, minDate, maxDate);
 
-            // Step 3 — batch lookup employee details from LSCentral (on LSDEV)
+            // Step 3 — batch employee lookup from LSCentral
             var employeeIds = shopifyMap.Values
                 .Where(v => !string.IsNullOrEmpty(v))
                 .Distinct()
@@ -85,10 +86,10 @@ namespace PulseHub.Pages.Reports
                 var idList = string.Join(",", employeeIds.Select(id => $"'{id}'"));
                 var empSql = @$"
                     SELECT
-                        CAST(employeeID AS VARCHAR) AS EmployeeID,
-                        employeeName                AS EmployeeName,
-                        storeID                     AS EmployeeStoreID,
-                        jobTitleDescriptionEN       AS JobTitle
+                        CAST(employeeID AS VARCHAR)  AS EmployeeID,
+                        employeeName                 AS EmployeeName,
+                        storeID                      AS EmployeeStoreID,
+                        jobTitleDescriptionEN        AS JobTitle
                     FROM [LSCentral].[dbo].[vw_LSStoreEmployees]
                     WHERE CAST(employeeID AS VARCHAR) IN ({idList})
                       AND endDate = '9999-12-31'";
@@ -102,19 +103,28 @@ namespace PulseHub.Pages.Reports
                         employeeMap[e.EmployeeID] = e;
             }
 
-            // Step 4 — merge
-            Rows = baseRows.Select(r =>
-            {
-                var rawAssocId = shopifyMap.GetValueOrDefault(r.OrderNumber ?? "");
-                var emp = !string.IsNullOrEmpty(rawAssocId)
-                    ? employeeMap.GetValueOrDefault(rawAssocId)
-                    : null;
+            // Step 4 — merge, persist RecognitionOf, build debug log
+            Rows = new();
+            DebugLog = new();
 
-                return new RecognitionRow
+            foreach (var r in baseRows)
+            {
+                var order = r.OrderNumber ?? "";
+                shopifyMap.TryGetValue(order, out var strippedId);
+                employeeMap.TryGetValue(strippedId ?? "", out var emp);
+
+                // Persist associateId into RecognitionOf if not already set or changed
+                if (!string.IsNullOrEmpty(strippedId) && r.RecognitionOf != strippedId)
+                {
+                    await _context.Database.ExecuteSqlRawAsync(
+                        $"UPDATE PulseHub_Response SET RecognitionOf = '{strippedId}' WHERE ResponseID = {r.ResponseID}");
+                }
+
+                Rows.Add(new RecognitionRow
                 {
                     ResponseID        = r.ResponseID,
                     ResponseSessionID = r.ResponseSessionID,
-                    EmployeeID        = rawAssocId,
+                    EmployeeID        = strippedId,
                     EmployeeName      = emp?.EmployeeName,
                     EmployeeStoreID   = emp?.EmployeeStoreID,
                     JobTitle          = emp?.JobTitle,
@@ -124,31 +134,41 @@ namespace PulseHub.Pages.Reports
                     CustomerEmail     = r.CustomerEmail,
                     CustomerName      = r.CustomerName,
                     AnswerText        = r.AnswerText
-                };
-            }).ToList();
+                });
+
+                DebugLog.Add(new DebugRow
+                {
+                    ResponseID         = r.ResponseID,
+                    OrderNumber        = order,
+                    RecognitionOfBefore = r.RecognitionOf,
+                    ShopifyRawId       = shopifyDebug.GetValueOrDefault(order),
+                    AssocIdStripped    = strippedId,
+                    EmployeeFound      = emp != null,
+                    EmployeeName       = emp?.EmployeeName ?? "(not found in LSCentral)",
+                    Note               = string.IsNullOrEmpty(order) ? "No order number" :
+                                         string.IsNullOrEmpty(strippedId) ? "No Shopify match" :
+                                         emp == null ? "Shopify ID found but no LSCentral match" :
+                                         "OK"
+                });
+            }
         }
 
-        // ── Shopify Lookup (LSInterfaceDB) ──────────────────────────────────────
-        private async Task<Dictionary<string, string>> LookupShopifyAssociatesAsync(
-            List<string> orderNumbers,
-            DateTime minDate,
-            DateTime maxDate)
+        // ── Shopify Lookup ──────────────────────────────────────────────────────
+        private async Task<(Dictionary<string, string> stripped, Dictionary<string, string> raw)>
+            LookupShopifyAssociatesAsync(List<string> orderNumbers, DateTime minDate, DateTime maxDate)
         {
-            var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            if (!orderNumbers.Any()) return result;
+            var stripped = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var raw      = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            if (!orderNumbers.Any()) return (stripped, raw);
 
             var connStr = _config.GetConnectionString("LSInterfaceDB")!;
-            var inList = string.Join(",", orderNumbers.Select(o => $"'{o.Replace("'", "''")}'"));
+            var inList  = string.Join(",", orderNumbers.Select(o => $"'{o.Replace("'", "''")}'"));
 
-            // Strip trailing zeros from associateId:
-            // Shopify stores employee IDs with trailing zeros (e.g. 6141500000 -> 61415).
-            // We divide by powers of 10 until no trailing zeros remain via integer cast trick.
-            // CAST(TRY_CAST(b.associateId AS BIGINT) AS VARCHAR) preserves the number,
-            // then REPLACE(RTRIM(REPLACE(...)) strips trailing zeros safely for purely numeric IDs.
             var sql = @$"
                 SELECT
                     a.orderName,
-                    -- Strip trailing zeros: '6141500000' -> '61415'
+                    b.associateId,
                     REVERSE(SUBSTRING(
                         REVERSE(CAST(TRY_CAST(b.associateId AS BIGINT) AS VARCHAR(20))),
                         PATINDEX('%[^0]%', REVERSE(CAST(TRY_CAST(b.associateId AS BIGINT) AS VARCHAR(20)))),
@@ -162,19 +182,32 @@ namespace PulseHub.Pages.Reports
                   AND TRY_CAST(b.associateId AS BIGINT) > 0
                   AND a.CreatedAt BETWEEN '{minDate:yyyy-MM-dd}' AND '{maxDate:yyyy-MM-dd}'";
 
-            using var conn = new SqlConnection(connStr);
-            await conn.OpenAsync();
-            using var cmd = new SqlCommand(sql, conn);
-            using var reader = await cmd.ExecuteReaderAsync();
-            while (await reader.ReadAsync())
+            try
             {
-                var orderName = reader["orderName"]?.ToString();
-                var assocId   = reader["associateIdStripped"]?.ToString();
-                if (!string.IsNullOrEmpty(orderName) && !string.IsNullOrEmpty(assocId))
-                    result.TryAdd(orderName, assocId);
+                using var conn = new SqlConnection(connStr);
+                await conn.OpenAsync();
+                using var cmd    = new SqlCommand(sql, conn);
+                using var reader = await cmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    var orderName  = reader["orderName"]?.ToString() ?? "";
+                    var assocRaw   = reader["associateId"]?.ToString() ?? "";
+                    var assocStrip = reader["associateIdStripped"]?.ToString() ?? "";
+                    if (!string.IsNullOrEmpty(orderName))
+                    {
+                        raw.TryAdd(orderName, assocRaw);
+                        stripped.TryAdd(orderName, assocStrip);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                // Surface the error in debug log — add a sentinel entry
+                raw["__error__"]     = ex.Message;
+                stripped["__error__"] = ex.Message;
             }
 
-            return result;
+            return (stripped, raw);
         }
 
         // ── DTOs ────────────────────────────────────────────────────────────────
@@ -189,6 +222,7 @@ namespace PulseHub.Pages.Reports
             public string? CustomerEmail { get; set; }
             public string? CustomerName { get; set; }
             public string? AnswerText { get; set; }
+            public string? RecognitionOf { get; set; }
         }
 
         private class EmployeeInfo
@@ -213,6 +247,18 @@ namespace PulseHub.Pages.Reports
             public string? CustomerEmail { get; set; }
             public string? CustomerName { get; set; }
             public string? AnswerText { get; set; }
+        }
+
+        public class DebugRow
+        {
+            public int ResponseID { get; set; }
+            public string? OrderNumber { get; set; }
+            public string? RecognitionOfBefore { get; set; }
+            public string? ShopifyRawId { get; set; }
+            public string? AssocIdStripped { get; set; }
+            public bool EmployeeFound { get; set; }
+            public string? EmployeeName { get; set; }
+            public string? Note { get; set; }
         }
     }
 }
