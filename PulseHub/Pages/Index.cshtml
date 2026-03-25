@@ -52,6 +52,16 @@
             </div>
         }
 
+        @if (Model.CanAccessManagerView)
+        {
+            <div class="col">
+                <a asp-page="/ManagerView" class="dashboard-card btn btn-primary">
+                    <i class="bi bi-person-lines-fill mb-2 fs-2"></i><br />
+                    Manager View
+                </a>
+            </div>
+        }
+
         @if (Model.CanAccessAdmin)
         {
             <div class="col">
