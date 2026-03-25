@@ -67,8 +67,16 @@
                 <i class="bi bi-bar-chart-line"></i> Reports
             </a>
         </div>
-        <div class="ms-auto">
+        <div class="ms-auto d-flex align-items-center gap-3">
             <span class="text-white-50 small">@version</span>
+            @{
+                var sessionUser = Context.Session.GetString("DisplayName") ?? Context.Session.GetString("Username");
+            }
+            @if (!string.IsNullOrEmpty(sessionUser))
+            {
+                <span class="text-white-50 small"><i class="bi bi-person-circle me-1"></i>@sessionUser</span>
+                <a href="/Logout" class="nav-link py-1 px-2" title="Sign out"><i class="bi bi-box-arrow-right"></i></a>
+            }
         </div>
     </nav>
     <hr class="m-0" style="border-color: rgba(255,255,255,0.1);" />
