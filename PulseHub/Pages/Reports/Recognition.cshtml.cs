@@ -36,6 +36,7 @@ namespace PulseHub.Pages.Reports
                     e.jobTitleDescriptionEN         AS JobTitle,
                     s.StoreNumber,
                     s.TransactionDate,
+                    s.OrderNumber,
                     s.Email                         AS CustomerEmail,
                     s.FirstName                     AS CustomerName,
                     r.AnswerText
@@ -64,6 +65,7 @@ namespace PulseHub.Pages.Reports
             public string? JobTitle { get; set; }
             public string? StoreNumber { get; set; }
             public DateTime TransactionDate { get; set; }
+            public string? OrderNumber { get; set; }
             public string? CustomerEmail { get; set; }
             public string? CustomerName { get; set; }
             public string? AnswerText { get; set; }

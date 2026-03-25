@@ -83,10 +83,11 @@
                         <thead class="table-dark">
                             <tr>
                                 <th class="ps-3 sortable" data-col="0">Date <span class="sort-icon">⇅</span></th>
-                                <th class="sortable" data-col="1">Store # <span class="sort-icon">⇅</span></th>
-                                <th class="sortable" data-col="2">Employee <span class="sort-icon">⇅</span></th>
-                                <th class="sortable" data-col="3">Job Title <span class="sort-icon">⇅</span></th>
-                                <th class="sortable" data-col="4">Customer <span class="sort-icon">⇅</span></th>
+                                <th class="sortable" data-col="1">Order # <span class="sort-icon">⇅</span></th>
+                                <th class="sortable" data-col="2">Store # <span class="sort-icon">⇅</span></th>
+                                <th class="sortable" data-col="3">Employee <span class="sort-icon">⇅</span></th>
+                                <th class="sortable" data-col="4">Job Title <span class="sort-icon">⇅</span></th>
+                                <th class="sortable" data-col="5">Customer <span class="sort-icon">⇅</span></th>
                                 <th>Comment</th>
                             </tr>
                         </thead>
@@ -95,6 +96,7 @@
                             {
                                 <tr>
                                     <td class="text-nowrap ps-3">@row.TransactionDate.ToString("yyyy-MM-dd")</td>
+                                    <td class="text-nowrap small text-muted">@row.OrderNumber</td>
                                     <td><span class="badge bg-secondary">@row.StoreNumber?.Trim()</span></td>
                                     <td>
                                         @if (!string.IsNullOrEmpty(row.EmployeeName))
