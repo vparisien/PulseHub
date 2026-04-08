@@ -4,13 +4,336 @@
     ViewData["Title"] = "Manager View";
 }
 
-<div class="app-header text-center py-4 mb-5 shadow-sm bg-primary">
-    <h1 class="display-5 fw-bold mb-0 text-white">Manager View</h1>
-    <p class="lead text-light">Your assigned survey responses.</p>
-</div>
-
-<div class="container">
-    <p class="text-muted text-center">No responses assigned yet. Check back soon.</p>
-</div>
-
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+
+<div class="container-fluid mt-4">
+    <div class="d-flex align-items-center mb-4 gap-3">
+        <a href="/" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left me-1"></i> Home
+        </a>
+        <div>
+            <h2 class="fw-bold mb-0"><i class="bi bi-person-badge me-2 text-primary"></i>Manager View</h2>
+            <small class="text-muted">Red-flagged survey responses assigned to you@(Model.IsRegionManager ? " and your region" : "")</small>
+        </div>
+    </div>
+
+    <!-- Hidden antiforgery token for AJAX -->
+    <form id="ajaxTokenForm">@Html.AntiForgeryToken()</form>
+
+    @if (Model.IsRegionManager)
+    {
+        <ul class="nav nav-tabs mb-4" id="managerTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="store-tab" data-bs-toggle="tab" data-bs-target="#storePane" type="button" role="tab">
+                    <i class="bi bi-shop me-1"></i> My Store
+                    @{ var storePending = Model.StoreSessions.Count(s => s.ActionStatus == "Pending"); }
+                    @if (storePending > 0)
+                    {
+                        <span class="badge bg-danger ms-1">@storePending</span>
+                    }
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="region-tab" data-bs-toggle="tab" data-bs-target="#regionPane" type="button" role="tab">
+                    <i class="bi bi-map me-1"></i> My Region
+                    @{ var regionPending = Model.RegionSessions.Count(s => s.ActionStatus == "Pending"); }
+                    @if (regionPending > 0)
+                    {
+                        <span class="badge bg-danger ms-1">@regionPending</span>
+                    }
+                </button>
+            </li>
+        </ul>
+
+        <div class="tab-content">
+            <div class="tab-pane fade show active" id="storePane" role="tabpanel">
+                @{ await RenderSessionTable(Model.StoreSessions, showAssignedTo: false); }
+            </div>
+            <div class="tab-pane fade" id="regionPane" role="tabpanel">
+                @{ await RenderSessionTable(Model.RegionSessions, showAssignedTo: true); }
+            </div>
+        </div>
+    }
+    else
+    {
+        @{ await RenderSessionTable(Model.StoreSessions, showAssignedTo: false); }
+    }
+</div>
+
+<!-- Session Detail Modal -->
+<div class="modal fade" id="sessionModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title"><i class="bi bi-flag-fill text-danger me-2"></i>Follow-up: <span id="modalOrderNum"></span></h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="modalSessionId" />
+
+                <div class="row mb-3 g-2 text-muted small">
+                    <div class="col-auto"><i class="bi bi-shop me-1"></i>Store: <strong id="modalStore"></strong></div>
+                    <div class="col-auto"><i class="bi bi-calendar me-1"></i><span id="modalDate"></span></div>
+                    <div class="col-auto"><i class="bi bi-person me-1"></i><span id="modalCustomer"></span></div>
+                </div>
+
+                <div class="alert alert-secondary py-2 mb-3" id="modalCuratorInfo"></div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold small">Responses</label>
+                    <div id="modalAnswers" class="border rounded p-2 bg-light small" style="max-height:180px; overflow-y:auto;"></div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold small">Curator Comment</label>
+                    <div id="modalCuratorComment" class="border rounded p-2 bg-light small text-muted fst-italic"></div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Manager Comment</label>
+                    <textarea id="modalManagerComment" class="form-control" rows="3" placeholder="Add your comment here..."></textarea>
+                </div>
+
+                <div class="form-check form-switch mt-3">
+                    <input class="form-check-input" type="checkbox" id="modalResponded" />
+                    <label class="form-check-label fw-bold text-success" for="modalResponded">Mark as Responded</label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" id="saveBtn" onclick="saveSession()">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast -->
+<div id="saveToast" class="toast align-items-center border-0" role="alert"
+     style="position:fixed; bottom:1.5rem; right:1.5rem; z-index:9999; min-width:260px;">
+    <div class="d-flex">
+        <div class="toast-body" id="saveToastMessage"></div>
+        <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+</div>
+
+@section Scripts {
+<style>
+    th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+    th.sortable:hover { background-color: rgba(255,255,255,0.1); }
+    th.sortable .sort-icon { opacity: 0.4; font-size: 0.75rem; }
+    th.sortable.asc .sort-icon::before  { content: "▲"; opacity: 1; }
+    th.sortable.desc .sort-icon::before { content: "▼"; opacity: 1; }
+    th.sortable.asc .sort-icon, th.sortable.desc .sort-icon { opacity: 1; }
+</style>
+<script>
+    let sessionModal, saveToast;
+
+    document.addEventListener('DOMContentLoaded', function () {
+        sessionModal = new bootstrap.Modal(document.getElementById('sessionModal'));
+        saveToast    = new bootstrap.Toast(document.getElementById('saveToast'), { delay: 4000 });
+
+        document.querySelectorAll('.session-trigger').forEach(el => {
+            el.addEventListener('click', function () {
+                openModal(JSON.parse(this.getAttribute('data-session')));
+            });
+        });
+
+        document.querySelectorAll('th.sortable').forEach(th => {
+            th.addEventListener('click', function () {
+                const tbody = this.closest('table').querySelector('tbody');
+                const col   = parseInt(this.getAttribute('data-col'));
+                const asc   = !this.classList.contains('asc');
+                this.closest('thead').querySelectorAll('th.sortable').forEach(h => h.classList.remove('asc', 'desc'));
+                this.classList.add(asc ? 'asc' : 'desc');
+                Array.from(tbody.querySelectorAll('tr'))
+                    .sort((a, b) => {
+                        const av = a.cells[col]?.innerText.trim() ?? '';
+                        const bv = b.cells[col]?.innerText.trim() ?? '';
+                        return asc ? av.localeCompare(bv, undefined, { numeric: true })
+                                   : bv.localeCompare(av, undefined, { numeric: true });
+                    })
+                    .forEach(r => tbody.appendChild(r));
+            });
+        });
+    });
+
+    function openModal(s) {
+        document.getElementById('modalSessionId').value = s.ResponseSessionID;
+        document.getElementById('modalOrderNum').innerText  = s.OrderNumber || 'N/A';
+        document.getElementById('modalStore').innerText     = s.StoreNumber?.trim() || '—';
+        document.getElementById('modalDate').innerText      = s.TransactionDate?.substring(0, 10) || '';
+        document.getElementById('modalCustomer').innerText  = s.CustomerName || s.CustomerEmail || '';
+
+        // Curator info banner
+        const curatorInfo = s.CuratorComment
+            ? `<i class="bi bi-chat-left-text me-1"></i><strong>Curator note:</strong> ${s.CuratorComment}`
+            : `<i class="bi bi-info-circle me-1"></i><span class="text-muted">No curator comment.</span>`;
+        document.getElementById('modalCuratorInfo').innerHTML = curatorInfo;
+
+        // Responses
+        const answersEl = document.getElementById('modalAnswers');
+        if (s.AnswerText) {
+            answersEl.innerHTML = s.AnswerText.split('||')
+                .map(a => `<div class="mb-1">${a.trim()}</div>`)
+                .join('<hr class="my-1">');
+        } else {
+            answersEl.innerHTML = '<span class="text-muted fst-italic">No response text.</span>';
+        }
+
+        document.getElementById('modalCuratorComment').innerText = s.CuratorComment || '—';
+        document.getElementById('modalManagerComment').value     = s.ManagerComment || '';
+        document.getElementById('modalResponded').checked        = s.RespondedAt !== null && s.RespondedAt !== undefined;
+
+        sessionModal.show();
+    }
+
+    async function saveSession() {
+        const saveBtn = document.getElementById('saveBtn');
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving...';
+
+        const sessionId = parseInt(document.getElementById('modalSessionId').value);
+        const responded = document.getElementById('modalResponded').checked;
+        const token     = document.querySelector('input[name="__RequestVerificationToken"]').value;
+
+        try {
+            const res = await fetch('?handler=MarkResponded', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'RequestVerificationToken': token },
+                body: JSON.stringify({ responseSessionId: sessionId, responded })
+            });
+
+            if (res.ok) {
+                sessionModal.hide();
+                location.reload();
+            } else {
+                showToast('Save failed. Please try again.', 'bg-danger text-white');
+            }
+        } catch (err) {
+            showToast('Network error. Please try again.', 'bg-danger text-white');
+        } finally {
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Save';
+        }
+    }
+
+    function showToast(msg, classes) {
+        const el = document.getElementById('saveToast');
+        el.className = 'toast align-items-center border-0 ' + classes;
+        document.getElementById('saveToastMessage').textContent = msg;
+        saveToast.show();
+    }
+</script>
+}
+
+@functions {
+    async Task RenderSessionTable(List<PulseHub.Pages.ManagerViewModel.ManagerSession> sessions, bool showAssignedTo)
+    {
+        var pending  = sessions.Count(s => s.ActionStatus == "Pending");
+        var actioned = sessions.Count(s => s.ActionStatus == "Actioned");
+
+        <div class="d-flex justify-content-end mb-2 gap-2">
+            <span class="badge bg-danger px-3 py-2">
+                <i class="bi bi-hourglass-split me-1"></i> Pending: @pending
+            </span>
+            <span class="badge bg-success px-3 py-2">
+                <i class="bi bi-check-circle me-1"></i> Actioned: @actioned
+            </span>
+        </div>
+
+        if (!sessions.Any())
+        {
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle me-2"></i>No red-flagged responses found.
+            </div>
+            return;
+        }
+
+        <div class="card shadow-sm">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0 align-middle">
+                        <thead class="table-dark">
+                            <tr>
+                                <th class="ps-3 sortable" data-col="0">Status <span class="sort-icon">⇅</span></th>
+                                <th class="sortable" data-col="1">Date <span class="sort-icon">⇅</span></th>
+                                <th class="sortable" data-col="2">Store # <span class="sort-icon">⇅</span></th>
+                                <th class="sortable" data-col="3">Order # <span class="sort-icon">⇅</span></th>
+                                <th class="sortable" data-col="4">Customer <span class="sort-icon">⇅</span></th>
+                                @if (showAssignedTo)
+                                {
+                                    <th class="sortable" data-col="5">Assigned To <span class="sort-icon">⇅</span></th>
+                                }
+                                <th>Response(s)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var s in sessions)
+                            {
+                                var isPending = s.ActionStatus == "Pending";
+                                <tr class="@(isPending ? "table-danger" : "table-success")">
+                                    <td class="ps-3">
+                                        @if (isPending)
+                                        {
+                                            <span class="badge bg-danger"><i class="bi bi-hourglass-split me-1"></i>Pending</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Actioned</span>
+                                        }
+                                    </td>
+                                    <td class="text-nowrap small">@s.TransactionDate.ToString("yyyy-MM-dd")</td>
+                                    <td><span class="badge bg-secondary">@s.StoreNumber?.Trim()</span></td>
+                                    <td>
+                                        <code class="session-trigger"
+                                              style="cursor:pointer; text-decoration:underline; color:#0d6efd;"
+                                              data-session='@System.Text.Json.JsonSerializer.Serialize(s)'>
+                                            @s.OrderNumber
+                                        </code>
+                                        @if (s.FlaggedCount > 1)
+                                        {
+                                            <span class="badge bg-warning text-dark ms-1">@s.FlaggedCount items</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <div class="small">@s.CustomerName</div>
+                                        <div class="text-muted small">@s.CustomerEmail</div>
+                                    </td>
+                                    @if (showAssignedTo)
+                                    {
+                                        <td class="small">
+                                            @if (!string.IsNullOrEmpty(s.AssignedToName))
+                                            {
+                                                <span class="fw-bold">@s.AssignedToName</span>
+                                            }
+                                            else if (!string.IsNullOrEmpty(s.AssignedTo))
+                                            {
+                                                <span class="text-muted fst-italic">#@s.AssignedTo</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">—</span>
+                                            }
+                                        </td>
+                                    }
+                                    <td class="small" style="max-width:320px;">
+                                        @if (!string.IsNullOrEmpty(s.AnswerText))
+                                        {
+                                            var parts = s.AnswerText.Split("||");
+                                            for (int i = 0; i < parts.Length; i++)
+                                            {
+                                                <span>@parts[i].Trim()</span>
+                                                if (i < parts.Length - 1) { <hr class="my-1" /> }
+                                            }
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        await Task.CompletedTask;
+    }
+}
